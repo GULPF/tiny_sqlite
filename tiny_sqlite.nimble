@@ -12,5 +12,5 @@ requires "nim >= 0.19.2"
 
 
 task test, "Run tests":
-    exec "nim c -r tests/tests tests/test.db"
+    exec "nim c -r tests/tests"
     rmFile "tests/tests"

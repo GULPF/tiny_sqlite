@@ -19,24 +19,24 @@ type
 
     DbValueKind* = enum ## \
             ## Enum of all possible value types in a Sqlite database.
-        sqliteNil,
-        sqliteInt,
-        sqliteFloat,
-        sqliteString,
+        sqliteNull,
+        sqliteInteger,
+        sqliteReal,
+        sqliteText,
         sqliteBlob
 
     DbValue* = object ## \
             ## Represents a value in a SQLite database.
         case kind*: DbValueKind
-        of sqliteInt:
+        of sqliteInteger:
             intVal*: int64
-        of sqliteFloat:
+        of sqliteReal:
             floatVal*: float64
-        of sqliteString:
+        of sqliteText:
             strVal*: string
         of sqliteBlob:
             blobVal*: seq[byte]
-        of sqliteNil:
+        of sqliteNull:
             discard
 
 proc newSqliteError(db: DbConn, errorCode: int32): ref SqliteError =
@@ -62,10 +62,10 @@ proc prepareSql(db: DbConn, sql: string, params: seq[DbValue]): PreparedSql
     for value in params:
         let rc =
             case value.kind
-            of sqliteNil:    sqlite.bind_null(result, idx)
-            of sqliteInt:    sqlite.bind_int64(result, idx, value.intval)
-            of sqliteFloat:  sqlite.bind_double(result, idx, value.floatVal)
-            of sqliteString: sqlite.bind_text(result, idx, value.strVal.cstring,
+            of sqliteNull:    sqlite.bind_null(result, idx)
+            of sqliteInteger:    sqlite.bind_int64(result, idx, value.intval)
+            of sqliteReal:  sqlite.bind_double(result, idx, value.floatVal)
+            of sqliteText: sqlite.bind_text(result, idx, value.strVal.cstring,
                 value.strVal.len.int32, sqlite.SQLITE_TRANSIENT)
             of sqliteBlob:   sqlite.bind_blob(result, idx.int32,
                 cast[string](value.blobVal).cstring,
@@ -91,40 +91,38 @@ proc finalize(prepared: PreparedSql) =
     sqlite.db_handle(prepared).checkRc(rc)
 
 proc toDbValue*[T: Ordinal](val: T): DbValue =
-    DbValue(kind: sqliteInt, intVal: val.int64)
+    DbValue(kind: sqliteInteger, intVal: val.int64)
 
-proc toDbValue*(val: float64): DbValue =
-    DbValue(kind: sqliteFloat, floatVal: val)
+proc toDbValue*(val: SomeFloat): DbValue =
+    DbValue(kind: sqliteReal, floatVal: val)
 
 proc toDbValue*(val: string): DbValue =
-    DbValue(kind: sqliteString, strVal: val)
+    DbValue(kind: sqliteText, strVal: val)
 
 proc toDbValue*(val: seq[byte]): DbValue =
     DbValue(kind: sqliteBlob, blobVal: val)
 
 proc toDbValue*(val: type(nil)): DbValue =
-    DbValue(kind: sqliteNil)
+    DbValue(kind: sqliteNull)
 
 proc toDbValue*[T](val: Option[T]): DbValue =
     if val.isNone:
-        DbValue(kind: sqliteNil)
+        DbValue(kind: sqliteNull)
     else:
         toDbValue(val.get)
 
-proc fromDbValue*(val: DbValue, T: typedesc[int64]): int64 = val.intVal
+proc fromDbValue*(val: DbValue, T: typedesc[Ordinal]): T = val.intval.T
 
-proc fromDbValue*(val: DbValue, T: typedesc[float64]): float64 = val.floatVal
+proc fromDbValue*(val: DbValue, T: typedesc[SomeFloat]): float64 = val.floatVal
 
 proc fromDbValue*(val: DbValue, T: typedesc[string]): string = val.strVal
 
 proc fromDbValue*(val: DbValue, T: typedesc[seq[byte]]): seq[byte] = val.blobVal
 
-proc fromDbValue*(val: DbValue, T: typedesc[Ordinal]): T = val.intval.T
-
 proc fromDbValue*(val: DbValue, T: typedesc[DbValue]): T = val
 
 proc fromDbValue*[T](val: DbValue, _: typedesc[Option[T]]): Option[T] =
-    if val.kind == sqliteNil:
+    if val.kind == sqliteNull:
         none(T)
     else:
         some(val.fromDbValue(T))
@@ -140,11 +138,11 @@ proc unpack*[T: tuple](row: openArray[DbValue], _: typedesc[T]): T =
 proc `$`*(dbVal: DbValue): string =
     result.add "DbValue["
     case dbVal.kind
-    of sqliteInt:    result.add $dbVal.intVal
-    of sqliteFloat:  result.add $dbVal.floatVal
-    of sqliteString: result.addQuoted dbVal.strVal
+    of sqliteInteger:    result.add $dbVal.intVal
+    of sqliteReal:  result.add $dbVal.floatVal
+    of sqliteText: result.addQuoted dbVal.strVal
     of sqliteBlob:   result.add "<blob>"
-    of sqliteNil:    result.add "nil"
+    of sqliteNull:    result.add "nil"
     result.add "]"
 
 proc exec*(db: DbConn, sql: string, params: varargs[DbValue, toDbValue]) =
@@ -218,7 +216,14 @@ proc rows*(db: DbConn, sql: string,
         result.add row
 
 proc openDatabase*(path: string): DbConn =
-    ## Open a new database connection to a database file.
+    ## Open a new database connection to a database file. To create a
+    ## in-memory database the special path `":memory:"` can be used.
+    ##
+    ## NOTE: To avoid memory leaks, ``db.close`` must be called when the
+    ## database connection is no longer needed.
+    runnableExamples:
+        let fileDB = openDatabase("/path/to/file")
+        let memDb = openDatabase(":memory:")
     let rc = sqlite.open(path, result)
     result.checkRc(rc)
 
