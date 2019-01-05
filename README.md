@@ -10,6 +10,8 @@ A database connection is opened with the `openDatabase` procedure. If the file d
 
 ```nim
     let db = openDatabase("path/to/file.db")
+    # ... (do something with `db`)
+    db.close()
 ```
 
 ## Executing SQL
@@ -21,6 +23,10 @@ The `exec` procedure can be used to execute a single SQL statement. The `execScr
         CREATE TABLE Person(
             name TEXT,
             age INTEGER
+        );
+
+        CREATE TABLE Log(
+            message TEXT
         );
     """)
 
@@ -41,10 +47,23 @@ To read data from the database, the `row` iterator and proc is used.
         # Nim type with the `fromDbValue` proc
         echo fromDbValue(row[0], string) # Prints the name
         echo fromDbValue(row[1], int)    # Prints the age
-        # Alternativly, the entire row can be unpacked at once
+        # Alternatively, the entire row can be unpacked at once
         let (name, age) = row.unpack((string, int))
         # To handle NULL values, `Option[T]` is used
         echo fromDbValue(row[0], Option[string]) # Will work even if the db value is NULL
+```
+
+## Inserting data
+
+The `execMany` proc can be used to execute an SQL statement several times with different parameters. This is useful for insertions:
+
+```nim
+    let parameters = @[@[toDbValue("Person 1")], @[toDbValue("Person 2")]]
+    # Will insert two rows
+    db.execMany("""
+        INSERT INTO Person(name)
+        VALUES(?);
+    """, parameters)
 ```
 
 ## Transactions
