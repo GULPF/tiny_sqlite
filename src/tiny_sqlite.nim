@@ -8,7 +8,11 @@ type
 
     PreparedSql = sqlite.Pstmt
 
-    SqliteError* = object of Exception ## \
+    DbMode* = enum
+        dbRead,
+        dbReadWrite
+
+    SqliteError* = object of CatchableError ## \
             ## Raised when an error in the underlying SQLite library
             ## occurs.
         errorCode*: int32 ## \
@@ -215,17 +219,24 @@ proc rows*(db: DbConn, sql: string,
     for row in db.rows(sql, params):
         result.add row
 
-proc openDatabase*(path: string): DbConn =
+proc openDatabase*(path: string, mode = dbReadWrite): DbConn =
     ## Open a new database connection to a database file. To create a
     ## in-memory database the special path `":memory:"` can be used.
+    ## If the database doesn't already exist and ``mode`` is ``dbReadWrite``,
+    ## the database will be created. If the database doesn't exist and ``mode``
+    ## is ``dbRead``, a ``SqliteError`` exception will be raised.
     ##
     ## NOTE: To avoid memory leaks, ``db.close`` must be called when the
     ## database connection is no longer needed.
     runnableExamples:
-        let fileDB = openDatabase("/path/to/file")
         let memDb = openDatabase(":memory:")
-    let rc = sqlite.open(path, result)
-    result.checkRc(rc)
+    case mode
+    of dbReadWrite:
+        let rc = sqlite.open(path, result)
+        result.checkRc(rc)
+    of dbRead:
+        let rc = sqlite.open_v2(path, result, sqlite.SQLITE_OPEN_READONLY, nil)
+        result.checkRc(rc)
 
 proc close*(db: DbConn) =
     ## Closes the database connection.
@@ -248,3 +259,7 @@ proc changes*(db: DbConn): int32 =
     ## For more information, refer to the SQLite documentation
     ## (https://www.sqlite.org/c3ref/changes.html).
     sqlite.changes(db)
+
+proc isReadonly*(db: DbConn): bool =
+    ## Returns true if ``db`` is in readonly mode.
+    sqlite.db_readonly(db, "main") == 1
