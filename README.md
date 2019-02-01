@@ -1,6 +1,20 @@
 # tiny_sqlite
 
-A thin SQLite wrapper for Nim.
+A thin SQLite wrapper for Nim. Compared to the `std/db_sqlite` module it has several advantages:
+
+- Proper type safety
+- Support for `NULL` values, using either `ref` types or `Option[T]`
+- Additional features
+
+A major difference in design is that `std/db_sqlite` implements a generic database interface that can be implemented by other databases (for example `std/db_mysql` and `std/postgres`), meaning that the database can be switched out more easily. The `tiny_sqlite` module however is only concerned with supporting SQLite. This has the advantage that functionality that might not exist in other databases can be supported.
+
+# Installation
+
+`tiny_sqlite` is available on Nimble:
+
+```
+nimble install tiny_sqlite
+```
 
 # Usage
 
@@ -94,7 +108,7 @@ The `tiny_sqlite` module never starts or commits transactions on it's own. There
 
 ## Supported types
 
-For a type to be supported for unpacking and parameter substitution the procedures `toDbValue` and `fromDbValue` must both exist. Below is table describing which types are supported by default and to which SQLite type they are mapped to:
+For a type to be supported when using unpacking and parameter substitution the procedures `toDbValue` and `fromDbValue` must be implemented for the type. Below is table describing which types are supported by default and to which SQLite type they are mapped to:
 
 | Nim type    | SQLite type                       |
 |-------------|-----------------------------------|
@@ -104,7 +118,7 @@ For a type to be supported for unpacking and parameter substitution the procedur
 | `seq[byte]` | `BLOB`                            |
 | `Option[T]` | `NULL` if none, otherwise map `T` |
 
-This can be extended by implementing `toDdValue`  and `fromDbValue` on your own. Below is an example how support for `times.Time` can be added:
+This can be extended by implementing `toDdValue`  and `fromDbValue` for other types on your own. Below is an example how support for `times.Time` can be added:
 
 ```nim
     import tiny_sqlite, times
