@@ -19,7 +19,7 @@ type
             ## This is the error code that was returned by the underlying
             ## SQLite library. Constants for the different possible
             ## values of this field exists in the
-            ## ``tiny_sqlite/sqlite3`` module.
+            ## ``tiny_sqlite/sqlite_wrapper`` module.
 
     DbValueKind* = enum ## \
             ## Enum of all possible value types in a Sqlite database.
@@ -56,10 +56,11 @@ template checkRc(db: DbConn, rc: int32) =
 
 proc prepareSql(db: DbConn, sql: string, params: seq[DbValue]): PreparedSql
         {.raises: [SqliteError].} =
-    assert (not db.isNil), "Database is nil"
     var tail: cstring
     let rc = sqlite.prepare_v2(db, sql.cstring, sql.len.cint, result, tail)
-    assert tail.len == 0, "Expected a single SQL statement"
+    assert tail.len == 0,
+        "`exec` and `execMany` can only be used with a single SQL statement. " &
+        "To execute several SQL statements, use `execScript`"
     db.checkRc(rc)
 
     var idx = 1'i32
@@ -203,7 +204,6 @@ iterator rows*(db: DbConn, sql: string,
                params: varargs[DbValue, toDbValue]): seq[DbValue] =
     ## Executes the query and iterates over the result dataset.
     assert (not db.isNil), "Database is nil"
-
     let prepared = db.prepareSql(sql, @params)
     defer: prepared.finalize()
 
