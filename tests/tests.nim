@@ -4,7 +4,7 @@ import tiny_sqlite
 
 let db = openDatabase(":memory:")
 
-doAssert not db.isReadonly
+doAssert(not db.isReadonly)
 
 db.execScript("""
     CREATE TABLE Person(

@@ -107,7 +107,11 @@ proc toDbValue*(val: string): DbValue =
 proc toDbValue*(val: seq[byte]): DbValue =
     DbValue(kind: sqliteBlob, blobVal: val)
 
-proc toDbValue*(val: type(nil)): DbValue =
+when (NimMajor, NimMinor, NimPatch) > (0, 19, 9):
+    proc toDbValue*(val: type(nil)): DbValue =
+        DbValue(kind: sqliteNull)
+
+proc nilDbValue(): DbValue =
     DbValue(kind: sqliteNull)
 
 proc toDbValue*[T](val: Option[T]): DbValue =
@@ -196,7 +200,7 @@ proc readColumn(prepared: PreparedSql, col: int32): DbValue =
             copyMem(addr(s[0]), blob, bytes)
         result = toDbValue(s)
     of sqlite.SQLITE_NULL:
-        result = toDbValue(nil)
+        result = nilDbValue()
     else:
         raiseAssert "Unexpected column type: " & $columnType
 
