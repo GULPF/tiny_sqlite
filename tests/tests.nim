@@ -1,6 +1,5 @@
 import std / [unittest, os, options]
-import tiny_sqlite
-
+import .. / src / tiny_sqlite
 
 let db = openDatabase(":memory:")
 

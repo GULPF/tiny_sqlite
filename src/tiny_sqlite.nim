@@ -13,8 +13,8 @@ type
         dbReadWrite
 
     SqliteError* = object of CatchableError ## \
-            ## Raised when an error in the underlying SQLite library
-            ## occurs.
+        ## Raised when an error in the underlying SQLite library
+        ## occurs.
         errorCode*: int32 ## \
             ## This is the error code that was returned by the underlying
             ## SQLite library. Constants for the different possible
@@ -22,7 +22,7 @@ type
             ## ``tiny_sqlite/sqlite_wrapper`` module.
 
     DbValueKind* = enum ## \
-            ## Enum of all possible value types in a Sqlite database.
+        ## Enum of all possible value types in a Sqlite database.
         sqliteNull,
         sqliteInteger,
         sqliteReal,
@@ -30,7 +30,7 @@ type
         sqliteBlob
 
     DbValue* = object ## \
-            ## Represents a value in a SQLite database.
+        ## Represents a value in a SQLite database.
         case kind*: DbValueKind
         of sqliteInteger:
             intVal*: int64
@@ -98,27 +98,29 @@ proc finalize(prepared: PreparedSql) =
 proc toDbValue*[T: Ordinal](val: T): DbValue =
     DbValue(kind: sqliteInteger, intVal: val.int64)
 
-proc toDbValue*(val: SomeFloat): DbValue =
+proc toDbValue*[T: SomeFloat](val: T): DbValue =
     DbValue(kind: sqliteReal, floatVal: val)
 
-proc toDbValue*(val: string): DbValue =
+proc toDbValue*[T: string](val: T): DbValue =
     DbValue(kind: sqliteText, strVal: val)
 
-proc toDbValue*(val: seq[byte]): DbValue =
+proc toDbValue*[T: seq[byte]](val: T): DbValue =
     DbValue(kind: sqliteBlob, blobVal: val)
 
-when (NimMajor, NimMinor, NimPatch) > (0, 19, 9):
-    proc toDbValue*(val: type(nil)): DbValue =
-        DbValue(kind: sqliteNull)
-
-proc nilDbValue(): DbValue =
-    DbValue(kind: sqliteNull)
-
-proc toDbValue*[T](val: Option[T]): DbValue =
+proc toDbValue*[T: Option](val: T): DbValue =
     if val.isNone:
         DbValue(kind: sqliteNull)
     else:
         toDbValue(val.get)
+
+when (NimMajor, NimMinor, NimPatch) > (0, 19, 9):
+    proc toDbValue*[T: type(nil)](val: T): DbValue =
+        DbValue(kind: sqliteNull)
+
+proc nilDbValue(): DbValue =
+    ## Since above isn't available for older versions,
+    ## we use this internally.
+    DbValue(kind: sqliteNull)
 
 proc fromDbValue*(val: DbValue, T: typedesc[Ordinal]): T = val.intval.T
 

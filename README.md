@@ -3,7 +3,7 @@
 A thin SQLite wrapper for Nim. Compared to the `std/db_sqlite` module it has several advantages:
 
 - Proper type safety
-- Support for `NULL` values, using either `ref` types or `Option[T]`
+- Support for `NULL` values `Option[T]`
 - Additional features
 
 A major difference in design is that `std/db_sqlite` implements a generic database interface that can be implemented by other databases (for example `std/db_mysql` and `std/postgres`), meaning that the database can be switched out more easily. The `tiny_sqlite` module however is only concerned with supporting SQLite. This has the advantage that functionality that might not exist in other databases can be supported.
@@ -15,6 +15,10 @@ A major difference in design is that `std/db_sqlite` implements a generic databa
 ```
 nimble install tiny_sqlite
 ```
+
+# API
+
+- [Generated docs](https://gulpf.github.io/tiny_sqlite/tiny_sqlite.html).
 
 # Usage
 
