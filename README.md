@@ -8,7 +8,7 @@ A thin SQLite wrapper for Nim. Compared to the `std/db_sqlite` module it has sev
 
 A major difference in design is that `std/db_sqlite` implements a generic database interface that can be implemented by other databases (for example `std/db_mysql` and `std/postgres`), meaning that the database can be switched out more easily. The `tiny_sqlite` module however is only concerned with supporting SQLite. This has the advantage that functionality that might not exist in other databases can be supported.
 
-# Installation
+## Installation
 
 `tiny_sqlite` is available on Nimble:
 
@@ -16,13 +16,13 @@ A major difference in design is that `std/db_sqlite` implements a generic databa
 nimble install tiny_sqlite
 ```
 
-# API
+## API reference
 
 - [Generated docs](https://gulpf.github.io/tiny_sqlite/tiny_sqlite.html).
 
-# Usage
+## Usage
 
-## Opening a database connection.
+### Opening a database connection.
 
 A database connection is opened with the `openDatabase` procedure. If the file doesn't exist, it will be created. An in-memory database can be created by using the special path `":memory:"` as an argument.
 
@@ -32,7 +32,7 @@ A database connection is opened with the `openDatabase` procedure. If the file d
     db.close()
 ```
 
-## Executing SQL
+### Executing SQL
 
 The `exec` procedure can be used to execute a single SQL statement. The `execScript` procedure is used to execute several statements, but it doesn't support parameter substitution.
 
@@ -54,7 +54,7 @@ The `exec` procedure can be used to execute a single SQL statement. The `execScr
     """, "John Doe", 37)
 ```
 
-## Reading data
+### Reading data
 
 To read data from the database, the `row` iterator and proc is used.
 
@@ -71,7 +71,7 @@ To read data from the database, the `row` iterator and proc is used.
         echo fromDbValue(row[0], Option[string]) # Will work even if the db value is NULL
 ```
 
-## Inserting data
+### Inserting data
 
 The `execMany` proc can be used to execute an SQL statement several times with different parameters. This is useful for insertions:
 
@@ -84,7 +84,7 @@ The `execMany` proc can be used to execute an SQL statement several times with d
     """, parameters)
 ```
 
-## Transactions
+### Transactions
 
 The `tiny_sqlite` module never starts or commits transactions on it's own. There are two options for handling transactions:
 
@@ -110,7 +110,7 @@ The `tiny_sqlite` module never starts or commits transactions on it's own. There
         """)
 ```
 
-## Supported types
+### Supported types
 
 For a type to be supported when using unpacking and parameter substitution the procedures `toDbValue` and `fromDbValue` must be implemented for the type. Below is table describing which types are supported by default and to which SQLite type they are mapped to:
 
