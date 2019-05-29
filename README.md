@@ -2,8 +2,8 @@
 
 A thin SQLite wrapper for Nim. Compared to the `std/db_sqlite` module it has several advantages:
 
-- Proper type safety
-- Support for `NULL` values `Option[T]`
+- Proper type safety (`std/db_sqlite` treats everything as strings)
+- Support for SQLite `NULL` values using `Option[T]`
 - Additional features
 
 A major difference in design is that `std/db_sqlite` implements a generic database interface that can be implemented by other databases (for example `std/db_mysql` and `std/postgres`), meaning that the database can be switched out more easily. The `tiny_sqlite` module however is only concerned with supporting SQLite. This has the advantage that functionality that might not exist in other databases can be supported.
