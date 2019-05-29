@@ -120,7 +120,7 @@ For a type to be supported when using unpacking and parameter substitution the p
 | `SomeFloat` | `REAL`                            |
 | `string`    | `TEXT`                            |
 | `seq[byte]` | `BLOB`                            |
-| `Option[T]` | `NULL` if none, otherwise map `T` |
+| `Option[T]` | `NULL` if none, otherwise the type that `T` would use |
 
 This can be extended by implementing `toDdValue`  and `fromDbValue` for other types on your own. Below is an example how support for `times.Time` can be added:
 
