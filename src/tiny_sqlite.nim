@@ -149,10 +149,10 @@ proc unpack*[T: tuple](row: openArray[DbValue], _: typedesc[T]): T =
 proc `$`*(dbVal: DbValue): string =
     result.add "DbValue["
     case dbVal.kind
-    of sqliteInteger:    result.add $dbVal.intVal
-    of sqliteReal:  result.add $dbVal.floatVal
-    of sqliteText: result.addQuoted dbVal.strVal
-    of sqliteBlob:   result.add "<blob>"
+    of sqliteInteger: result.add $dbVal.intVal
+    of sqliteReal:    result.add $dbVal.floatVal
+    of sqliteText:    result.addQuoted dbVal.strVal
+    of sqliteBlob:    result.add "<blob>"
     of sqliteNull:    result.add "nil"
     result.add "]"
 
@@ -178,12 +178,17 @@ proc execScript*(db: DbConn, sql: string) =
 
 template transaction*(db: DbConn, body: untyped) =
     db.exec("BEGIN")
+    var ok = true
     try:
-        body
-        db.exec("COMMIT")
-    except Exception as ex:
-        db.exec("ROLLBACK")
-        raise ex
+        try:
+            body
+        except Exception as ex:
+            ok = false
+            db.exec("ROLLBACK")
+            raise ex
+    finally:
+        if ok:
+            db.exec("COMMIT")
 
 proc readColumn(prepared: PreparedSql, col: int32): DbValue =
     let columnType = sqlite.column_type(prepared, col)
