@@ -1,12 +1,12 @@
 # tiny_sqlite
 
-A thin SQLite wrapper for Nim. Compared to the `std/db_sqlite` module it has several advantages:
+NOTE: the API is still evolving and breaking changes might be introduced
 
-- Proper type safety (`std/db_sqlite` treats everything as strings)
-- Support for SQLite `NULL` values using `Option[T]`
-- Additional features
+`tiny_sqlite` is a comparatively thin wrapper for the SQLite database library. It differs from the standard library module `std/sqlite` in several ways:
 
-A major difference in design is that `std/db_sqlite` implements a generic database interface that can be implemented by other databases (for example `std/db_mysql` and `std/postgres`), meaning that the database can be switched out more easily. The `tiny_sqlite` module however is only concerned with supporting SQLite. This has the advantage that functionality that might not exist in other databases can be supported.
+- `tiny_sqlite` represents database values with a type safe case object called `DbValue` instead of treating every value as a string, which among other things means that SQLite `NULL` values can be properly supported.
+
+- `tiny_sqlite` is not designed as a generic database API, only SQLite will ever be supported. The database modules in the standard library are built with replaceability in mind so that the code might work with several different database engines just by replacing an import. This is not the case for `tiny_sqlite`.
 
 ## Installation
 
@@ -16,120 +16,37 @@ A major difference in design is that `std/db_sqlite` implements a generic databa
 nimble install tiny_sqlite
 ```
 
-## API reference
-
-- [Generated docs](https://gulpf.github.io/tiny_sqlite/tiny_sqlite.html).
-
 ## Usage
 
-### Opening a database connection.
-
-A database connection is opened with the `openDatabase` procedure. If the file doesn't exist, it will be created. An in-memory database can be created by using the special path `":memory:"` as an argument.
-
 ```nim
-    let db = openDatabase("path/to/file.db")
-    # ... (do something with `db`)
-    db.close()
+import tiny_sqlite, std / options
+
+let db = openDatabase(":memory:")
+db.execScript("""
+CREATE TABLE Person(
+    name TEXT,
+    age INTEGER
+);
+
+INSERT INTO
+    Person(name, age)
+VALUES
+    ('John Doe', 47);
+""")
+
+db.exec("INSERT INTO Person VALUES(?, ?)", "Jane Doe", nil)
+
+for row in db.rows("SELECT name, age FROM Person"):
+    let (name, age) = row.unpack((string, Option[int]))
+    echo name, " ", age
+
+# Output:
+# John Doe Some(47)
+# Jane Doe None[int]
 ```
 
-### Executing SQL
+## Documentation
 
-The `exec` procedure can be used to execute a single SQL statement. The `execScript` procedure is used to execute several statements, but it doesn't support parameter substitution.
+- [Documentation available here](https://gulpf.github.io/tiny_sqlite/tiny_sqlite.html).
 
-```nim
-    db.execScript("""
-        CREATE TABLE Person(
-            name TEXT,
-            age INTEGER
-        );
 
-        CREATE TABLE Log(
-            message TEXT
-        );
-    """)
-
-    db.exec("""
-        INSERT INTO Person(name, age)
-        VALUES(?, ?);
-    """, "John Doe", 37)
-```
-
-### Reading data
-
-To read data from the database, the `row` iterator and proc is used.
-
-```nim
-    for row in db.rows("SELECT name, age FROM Person"):
-        # The `row` variable is of type `seq[DbValue]`.
-        # Each column value can be converted to a normal
-        # Nim type with the `fromDbValue` proc
-        echo fromDbValue(row[0], string) # Prints the name
-        echo fromDbValue(row[1], int)    # Prints the age
-        # Alternatively, the entire row can be unpacked at once
-        let (name, age) = row.unpack((string, int))
-        # To handle NULL values, `Option[T]` is used
-        echo fromDbValue(row[0], Option[string]) # Will work even if the db value is NULL
-```
-
-### Inserting data
-
-The `execMany` proc can be used to execute an SQL statement several times with different parameters. This is useful for insertions:
-
-```nim
-    let parameters = @[@[toDbValue("Person 1")], @[toDbValue("Person 2")]]
-    # Will insert two rows
-    db.execMany("""
-        INSERT INTO Person(name)
-        VALUES(?);
-    """, parameters)
-```
-
-### Transactions
-
-The `tiny_sqlite` module never starts or commits transactions on it's own. There are two options for handling transactions:
-
-```nim
-    # Option 1: using `db.exec` to begin/commit/rollback transactions.
-
-    db.exec("BEGIN")
-    try:
-        db.execScript("""
-            DELETE FROM Person;
-            INSERT INTO Person(name, age) VALUES("Jane Doe", 35);
-        """)
-    except SqliteError:
-        db.exec("ROLLBACK")
-    db.exec("COMMIT")
-
-    # Option 2: using the `transaction` template, which is a shortcut for the above code
-
-    db.transaction:
-        db.execScript("""
-            DELETE FROM Person;
-            INSERT INTO Person(name, age) VALUES("Jane Doe", 35);
-        """)
-```
-
-### Supported types
-
-For a type to be supported when using unpacking and parameter substitution the procedures `toDbValue` and `fromDbValue` must be implemented for the type. Below is table describing which types are supported by default and to which SQLite type they are mapped to:
-
-| Nim type    | SQLite type                       |
-|-------------|-----------------------------------|
-| `Ordinal`   | `INTEGER`                         |
-| `SomeFloat` | `REAL`                            |
-| `string`    | `TEXT`                            |
-| `seq[byte]` | `BLOB`                            |
-| `Option[T]` | `NULL` if none, otherwise the type that `T` would use |
-
-This can be extended by implementing `toDdValue`  and `fromDbValue` for other types on your own. Below is an example how support for `times.Time` can be added:
-
-```nim
-    import tiny_sqlite, times
-
-    proc toDbValue(t: Time): DbValue =
-        DbValue(kind: sqliteInt, toUnix(t))
-
-    proc fromDbValue(val: DbValue, T: typedesc[Time]): Time =
-        fromUnix(val.intval)
-```

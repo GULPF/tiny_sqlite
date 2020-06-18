@@ -1,10 +1,15 @@
-import std / [strutils, options, macros, typetraits]
+include tiny_sqlite / private / documentation
+
+import std / [options, macros, typetraits, tables]
 from tiny_sqlite/sqlite_wrapper as sqlite import nil
 
 type
-    DbConn* = sqlite.PSqlite3 ## \
-        ## Encapsulates a database connection.
-        ## Note that this is just an alias for `sqlite_wrapper.PSqlite3`.
+    DbConnImpl = ref object 
+        handle: sqlite.PSqlite3 ## The underlying SQLite3 handle
+        cache: OrderedTable[string, PreparedSql]
+        cacheSize: int
+
+    DbConn* = distinct DbConnImpl ## Encapsulates a database connection.
 
     PreparedSql = sqlite.Pstmt
 
@@ -13,16 +18,12 @@ type
         dbReadWrite
 
     SqliteError* = object of CatchableError ## \
-        ## Raised when an error in the underlying SQLite library
-        ## occurs.
-        errorCode*: int32 ## \
-            ## This is the error code that was returned by the underlying
-            ## SQLite library. Constants for the different possible
-            ## values of this field exists in the
-            ## ``tiny_sqlite/sqlite_wrapper`` module.
+        ## Raised when whenever a database related error occurs.
+        ## Errors are typically a result of API misuse,
+        ## e.g trying to close an already closed database connection.
 
     DbValueKind* = enum ## \
-        ## Enum of all possible value types in a Sqlite database.
+        ## Enum of all possible value types in a SQLite database.
         sqliteNull,
         sqliteInteger,
         sqliteReal,
@@ -30,7 +31,7 @@ type
         sqliteBlob
 
     DbValue* = object ## \
-        ## Represents a value in a SQLite database.
+        ## Can represent any value in a SQLite database.
         case kind*: DbValueKind
         of sqliteInteger:
             intVal*: int64
@@ -43,57 +44,79 @@ type
         of sqliteNull:
             discard
 
-proc newSqliteError(db: DbConn, errorCode: int32): ref SqliteError =
-    ## Raises a SqliteError exception.
-    (ref SqliteError)(
-        msg: $sqlite.errmsg(db),
-        errorCode: errorCode
-    )
+    DbConnOrHandle = DbConn | sqlite.PSqlite3
 
-template checkRc(db: DbConn, rc: int32) =
-    if rc != sqlite.SQLITE_OK:
-        raise newSqliteError(db, rc)
+const SqliteRcOk = [ sqlite.SQLITE_OK, sqlite.SQLITE_DONE, sqlite.SQLITE_ROW ]
+
+# Forward declarations
+proc isInTransaction*(db: DbConn): bool {.noSideEffect.}
+
+template handle(db: DbConn): sqlite.PSqlite3 = DbConnImpl(db).handle
+template handle(handle: sqlite.PSqlite3): sqlite.PSqlite3 = handle
+template cache(db: DbConn): OrderedTable[string, PreparedSql] = DbConnImpl(db).cache
+template cacheSize(db: DbConn): int = DbConnImpl(db).cacheSize
+
+template assertDbOpen(db: DbConn) =
+    assert not db.handle.isNil, "Database is closed"
+
+proc newSqliteError(db: DbConnOrHandle): ref SqliteError =
+    ## Raises a SqliteError exception.
+    (ref SqliteError)(msg: $sqlite.errmsg(db.handle))
+
+proc newSqliteError(msg: string): ref SqliteError =
+    ## Raises a SqliteError exception.
+    (ref SqliteError)(msg: msg)
+
+template checkRc(db: DbConnOrHandle, rc: int32) =
+    if rc notin SqliteRcOk:
+        raise newSqliteError(db)
+
+proc addToCache(db: DbConn, sql: string, prepared: PreparedSql): void =
+    db.cache[sql] = prepared
+    if db.cache.len > db.cacheSize:
+        for k, v in db.cache:
+            # Discard rc: rc can be ignored - an error code does not indicate that finalize failed
+            discard sqlite.finalize(v)
+            db.cache.del k
+            break
 
 proc prepareSql(db: DbConn, sql: string, params: seq[DbValue]): PreparedSql
         {.raises: [SqliteError].} =
-    var tail: cstring
-    let rc = sqlite.prepare_v2(db, sql.cstring, sql.len.cint, result, tail)
-    assert tail.len == 0,
-        "`exec` and `execMany` can only be used with a single SQL statement. " &
-        "To execute several SQL statements, use `execScript`"
-    db.checkRc(rc)
+    if db.cacheSize > 0:
+        result = db.cache.getOrDefault(sql)
+    if result.isNil:
+        var tail: cstring
+        let rc = sqlite.prepare_v2(db.handle, sql.cstring, sql.len.cint, result, tail)
+        db.checkRc(rc)
+        assert tail.len == 0,
+            "'exec' and 'execMany' can only be used with a single SQL statement. " &
+            "To execute several SQL statements, use 'execScript'"
+        if db.cacheSize > 0:
+            db.addToCache(sql, result)
+
+    let expectedParamsLen = sqlite.bind_parameter_count(result) 
+    if expectedParamsLen != params.len:
+        raise newSqliteError("SQL statement contains " & $expectedParamsLen &
+            " parameters but only " & $params.len & " was provided.")
 
     var idx = 1'i32
     for value in params:
         let rc =
             case value.kind
-            of sqliteNull:    sqlite.bind_null(result, idx)
-            of sqliteInteger:    sqlite.bind_int64(result, idx, value.intval)
-            of sqliteReal:  sqlite.bind_double(result, idx, value.floatVal)
-            of sqliteText: sqlite.bind_text(result, idx, value.strVal.cstring,
-                value.strVal.len.int32, sqlite.SQLITE_TRANSIENT)
-            of sqliteBlob:   sqlite.bind_blob(result, idx.int32,
-                cast[string](value.blobVal).cstring,
-                value.blobVal.len.int32, sqlite.SQLITE_TRANSIENT)
+            of sqliteNull:
+                sqlite.bind_null(result, idx)
+            of sqliteInteger:
+                sqlite.bind_int64(result, idx, value.intval)
+            of sqliteReal:
+                sqlite.bind_double(result, idx, value.floatVal)
+            of sqliteText:   
+                sqlite.bind_text(result, idx, value.strVal.cstring, value.strVal.len.int32, sqlite.SQLITE_TRANSIENT)
+            of sqliteBlob:
+                sqlite.bind_blob(result, idx.int32, cast[string](value.blobVal).cstring,
+                    value.blobVal.len.int32, sqlite.SQLITE_TRANSIENT)
 
         sqlite.db_handle(result).checkRc(rc)
         idx.inc
-
-proc next(prepared: PreparedSql): bool =
-    ## Advance cursor by one row.
-    ## Return ``true`` if there are more rows.
-    let rc = sqlite.step(prepared)
-    if rc == sqlite.SQLITE_ROW:
-        result = true
-    elif rc == sqlite.SQLITE_DONE:
-        result = false
-    else:
-        raise newSqliteError(sqlite.db_handle(prepared), rc)
-
-proc finalize(prepared: PreparedSql) =
-    ## Finalize statement or raise SqliteError if not successful.
-    let rc = sqlite.finalize(prepared)
-    sqlite.db_handle(prepared).checkRc(rc)
 
 proc toDbValue*[T: Ordinal](val: T): DbValue =
     DbValue(kind: sqliteInteger, intVal: val.int64)
@@ -113,13 +136,7 @@ proc toDbValue*[T: Option](val: T): DbValue =
     else:
         toDbValue(val.get)
 
-when (NimMajor, NimMinor, NimPatch) > (0, 19, 9):
-    proc toDbValue*[T: type(nil)](val: T): DbValue =
-        DbValue(kind: sqliteNull)
-
-proc nilDbValue(): DbValue =
-    ## Since above isn't available for older versions,
-    ## we use this internally.
+proc toDbValue*[T: type(nil)](val: T): DbValue =
     DbValue(kind: sqliteNull)
 
 proc fromDbValue*(val: DbValue, T: typedesc[Ordinal]): T = val.intval.T
@@ -157,38 +174,50 @@ proc `$`*(dbVal: DbValue): string =
     result.add "]"
 
 proc exec*(db: DbConn, sql: string, params: varargs[DbValue, toDbValue]) =
-    ## Executes ``sql`` and raises SqliteError if not successful.
-    assert (not db.isNil), "Database is nil"
+    ## Executes ``sql``, which must be a single SQL statement.
+    assertDbOpen db
     let prepared = db.prepareSql(sql, @params)
-    defer: prepared.finalize()
-    discard prepared.next
-
-proc execMany*(db: DbConn, sql: string, params: seq[seq[DbValue]]) =
-    ## Executes ``sql`` repeatedly using each element of ``params`` as parameters.
-    assert (not db.isNil), "Database is nil"
-    for p in params:
-        db.exec(sql, p)
-
-proc execScript*(db: DbConn, sql: string) =
-    ## Executes the query and raises SqliteError if not successful.
-    assert (not db.isNil), "Database is nil"
-    let rc = sqlite.exec(db, sql.cstring, cast[sqlite.Callback](nil), nil,
-        cast[var cstring](nil))
+    let rc = sqlite.step(prepared)
+    # Discard rc: Discarding return code here is OK as reset & finalize will never return
+    # an error code if step didn't return an error code.
+    if db.cacheSize > 0:
+        discard sqlite.reset(prepared)
+    else:
+        discard sqlite.finalize(prepared)
     db.checkRc(rc)
 
 template transaction*(db: DbConn, body: untyped) =
-    db.exec("BEGIN")
-    var ok = true
-    try:
+    # Nested transactions are not supported in SQLite so we make it a no-op
+    if db.isInTransaction:
+        body
+    else:
+        db.exec("BEGIN")
+        var ok = true
         try:
-            body
-        except Exception as ex:
-            ok = false
-            db.exec("ROLLBACK")
-            raise ex
-    finally:
-        if ok:
-            db.exec("COMMIT")
+            try:
+                body
+            except Exception:
+                ok = false
+                db.exec("ROLLBACK")
+                raise
+        finally:
+            if ok:
+                db.exec("COMMIT")
+
+proc execMany*(db: DbConn, sql: string, params: seq[seq[DbValue]]) =
+    ## Executes ``sql`` repeatedly using each element of ``params`` as parameters.
+    ## The statements are executed inside a transaction.
+    assertDbOpen db
+    db.transaction:
+        for p in params:
+            db.exec(sql, p)
+
+proc execScript*(db: DbConn, sql: string) =
+    ## Executes ``sql``, which can consist of multiple SQL statements.
+    ## The statements are executed inside a transaction.
+    assertDbOpen db
+    let rc = sqlite.exec(db.handle, sql.cstring, cast[sqlite.Callback](nil), nil, cast[var cstring](nil))
+    db.checkRc(rc)
 
 proc readColumn(prepared: PreparedSql, col: int32): DbValue =
     let columnType = sqlite.column_type(prepared, col)
@@ -207,30 +236,45 @@ proc readColumn(prepared: PreparedSql, col: int32): DbValue =
             copyMem(addr(s[0]), blob, bytes)
         result = toDbValue(s)
     of sqlite.SQLITE_NULL:
-        result = nilDbValue()
+        result = toDbValue(nil)
     else:
         raiseAssert "Unexpected column type: " & $columnType
 
 iterator rows*(db: DbConn, sql: string,
                params: varargs[DbValue, toDbValue]): seq[DbValue] =
-    ## Executes the query and iterates over the result dataset.
-    assert (not db.isNil), "Database is nil"
+    ## Executes ``sql`` and yield each resulting row.
+    assertDbOpen db
     let prepared = db.prepareSql(sql, @params)
-    defer: prepared.finalize()
-
-    var row = newSeq[DbValue](sqlite.column_count(prepared))
-    while prepared.next:
-        for col, _ in row:
-            row[col] = readColumn(prepared, col.int32)
-        yield row
+    var errorRc: int32 = sqlite.SQLITE_OK
+    try:
+        var row = newSeq[DbValue](sqlite.column_count(prepared))
+        while true:
+            let rc = sqlite.step(prepared)
+            if rc == sqlite.SQLITE_ROW:
+                for col, _ in row:
+                    row[col] = readColumn(prepared, col.int32)
+                yield row
+            elif rc == sqlite.SQLITE_DONE:
+                break
+            else:
+                errorRc = rc
+                break
+    finally:
+        # Discard rc: Discarding return code here is OK as reset & finalize will never return
+        # an error code if step didn't return an error code.
+        if db.cacheSize > 0:
+            discard sqlite.reset(prepared)
+        else:
+            discard sqlite.finalize(prepared)
+        db.checkRc(errorRc)
 
 proc rows*(db: DbConn, sql: string,
            params: varargs[DbValue, toDbValue]): seq[seq[DbValue]] =
-    ## Executes the query and returns the resulting rows.
+    ## Executes ``sql`` and returns all resulting rows.
     for row in db.rows(sql, params):
         result.add row
 
-proc openDatabase*(path: string, mode = dbReadWrite): DbConn =
+proc openDatabase*(path: string, mode = dbReadWrite, cacheSize = 50): DbConn =
     ## Open a new database connection to a database file. To create a
     ## in-memory database the special path `":memory:"` can be used.
     ## If the database doesn't already exist and ``mode`` is ``dbReadWrite``,
@@ -241,18 +285,29 @@ proc openDatabase*(path: string, mode = dbReadWrite): DbConn =
     ## database connection is no longer needed.
     runnableExamples:
         let memDb = openDatabase(":memory:")
+    var handle: sqlite.PSqlite3
     case mode
     of dbReadWrite:
-        let rc = sqlite.open(path, result)
-        result.checkRc(rc)
+        let rc = sqlite.open(path, handle)
+        handle.checkRc(rc)
     of dbRead:
-        let rc = sqlite.open_v2(path, result, sqlite.SQLITE_OPEN_READONLY, nil)
-        result.checkRc(rc)
+        let rc = sqlite.open_v2(path, handle, sqlite.SQLITE_OPEN_READONLY, nil)
+        handle.checkRc(rc)
+    let db = new DbConnImpl
+    db.handle = handle
+    db.cacheSize = cacheSize
+    result = DbConn(db)
 
 proc close*(db: DbConn) =
-    ## Closes the database connection.
-    let rc = sqlite.close(db)
+    ## Closes the database connection. This should be called once the connection will no longer be used
+    ## to avoid leaking memory.
+    assertDbOpen db
+    for prepared in db.cache.values:
+        let rc = sqlite.finalize(prepared)
+        db.checkRc(rc)
+    let rc = sqlite.close(db.handle)
     db.checkRc(rc)
+    DbConnImpl(db).handle = nil
 
 proc lastInsertRowId*(db: DbConn): int64 =
     ## Get the row id of the last inserted row.
@@ -261,7 +316,8 @@ proc lastInsertRowId*(db: DbConn): int64 =
     ##
     ## For more information, refer to the SQLite documentation
     ## (https://www.sqlite.org/c3ref/last_insert_rowid.html).
-    sqlite.last_insert_rowid(db)
+    assertDbOpen db
+    sqlite.last_insert_rowid(db.handle)
 
 proc changes*(db: DbConn): int32 =
     ## Get the number of changes triggered by the most recent INSERT, UPDATE or
@@ -269,8 +325,23 @@ proc changes*(db: DbConn): int32 =
     ##
     ## For more information, refer to the SQLite documentation
     ## (https://www.sqlite.org/c3ref/changes.html).
-    sqlite.changes(db)
+    assertDbOpen db
+    sqlite.changes(db.handle)
 
 proc isReadonly*(db: DbConn): bool =
     ## Returns true if ``db`` is in readonly mode.
-    sqlite.db_readonly(db, "main") == 1
+    assertDbOpen db
+    sqlite.db_readonly(db.handle, "main") == 1
+
+proc isOpen*(db: DbConn): bool {.inline.} =
+    (not DbConnImpl(db).isNil) and (not db.handle.isNil)
+
+proc isInTransaction*(db: DbConn): bool =
+    ## Returns true if a transaction is currently active.
+    sqlite.get_autocommit(db.handle) == 0
+
+proc handle*(db: DbConn): sqlite.PSqlite3 {.inline.} =
+    ## Returns the raw SQLite3 handle. This can be used to interact directly with the SQLite C API
+    ## with the `tiny_sqlite/sqlite_wrapper` module.
+    assert not DbConnImpl(db).handle.isNil, "Database is closed"
+    DbConnImpl(db).handle
