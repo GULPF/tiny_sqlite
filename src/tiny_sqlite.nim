@@ -216,8 +216,19 @@ proc execScript*(db: DbConn, sql: string) =
     ## Executes ``sql``, which can consist of multiple SQL statements.
     ## The statements are executed inside a transaction.
     assertDbOpen db
-    let rc = sqlite.exec(db.handle, sql.cstring, cast[sqlite.Callback](nil), nil, cast[var cstring](nil))
-    db.checkRc(rc)
+    db.transaction:
+        var remaining = sql.cstring
+        while remaining.len > 0:
+            var tail: cstring
+            var prepared: PreparedSql
+            var rc = sqlite.prepare_v2(db.handle, remaining, sql.len.cint, prepared, tail)
+            db.checkRc(rc)
+            rc = sqlite.step(prepared)
+            # Discard rc: Discarding return code here is OK as finalize will never return
+            # an error code if step didn't return an error code.
+            discard sqlite.finalize(prepared)
+            db.checkRc(rc)
+            remaining = tail
 
 proc readColumn(prepared: PreparedSql, col: int32): DbValue =
     let columnType = sqlite.column_type(prepared, col)

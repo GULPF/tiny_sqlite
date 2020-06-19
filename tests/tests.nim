@@ -84,20 +84,19 @@ test "db.execScript with failure":
         let rows = db.rows(SelectPersons)
         check rows.len == 2
 
-when false:
-    test "db.execScript in transaction":
-        withDb:
-            expect SqliteError:
-                db.execScript("""
-                    INSERT
-                        INSERT INTO Person(name, age)
-                        VALUES('John Persson', 23);
+test "db.execScript in transaction":
+    withDb:
+        expect SqliteError:
+            db.execScript("""
+                INSERT
+                    INSERT INTO Person(name, age)
+                    VALUES('John Persson', 23);
 
-                        INSERT INTO Wrong(field)
-                        VALUES(10);
-                """)
-            let rows = db.rows(SelectPersons)
-            check rows.len == 2
+                    INSERT INTO Wrong(field)
+                    VALUES(10);
+            """)
+        let rows = db.rows(SelectPersons)
+        check rows.len == 2
 
 test "db.transaction with return":
     withDb:
@@ -130,24 +129,12 @@ test "db.transaction nesting":
             db.transaction:
                 check db.rows(SelectPersons).len == 2
 
-test "db.transaction 2":
+test "db.isInTransaction":
     withDb:
+        check not db.isInTransaction
         db.transaction:
-            for _ in 0 .. 2:
-                check db.rows(SelectPersons).len == 2
-
-
-test "SqliteError":
-    withDb:
-        expect SqliteError:
-            db.execScript("""
-                CREATE TABLE Person(
-                    name TEXT,
-                    age INTEGER
-                );
-            """)
-        expect SqliteError:
-            discard openDatabase("some/made/up/path", dbRead)
+            check db.isInTransaction
+        check not db.isInTransaction
 
 test "db.isOpen":
     var db: DbConn
@@ -170,6 +157,18 @@ test "cacheSize=0":
     discard db.rows(SelectPersons)
     discard db.rows(SelectPersons)
     db.close()
+
+test "SqliteError":
+    withDb:
+        expect SqliteError:
+            db.execScript("""
+                CREATE TABLE Person(
+                    name TEXT,
+                    age INTEGER
+                );
+            """)
+        expect SqliteError:
+            discard openDatabase("some/made/up/path", dbRead)
 
 test "Type mappings":
     withDb:
