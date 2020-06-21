@@ -6,7 +6,7 @@ const SelectJohnDoe = "SELECT name, age FROM Person WHERE name = 'John Doe'"
 type SelectPersonsRowType = tuple[name: string, age: Option[int]]
 
 proc writePersons(db: DbConn) {.used.} =
-    for row in db.rows(SelectPersons):
+    for row in db.all(SelectPersons):
         let (name, age) = row.unpack(SelectPersonsRowType)
         echo name, "\t", age
 
@@ -20,22 +20,33 @@ template withDb(body: untyped) =
     finally:
         db.close()
 
-test "db.rows":
+test "db.all":
     withDb:
-        let rows = db.rows(SelectPersons)
+        let rows = db.all(SelectPersons)
         check rows.len == 2
         let unpackedRows = rows.mapIt(it.unpack(SelectPersonsRowType))
         check unpackedRows.anyIt(it.name == "John Doe" and it.age == some(47))
         check unpackedRows.anyIt(it.name == "Jane Doe" and it.age == none(int))
 
-test "db.rows with break":
+test "db.all with break":
     # This tests that the prepared statement is cleaned up even when the iterator does
     # not run to completion
     withDb:
-        for row in db.rows("SELECT name, age FROM Person WHERE name = ?", "John Doe"):
+        for row in db.all("SELECT name, age FROM Person WHERE name = ?", "John Doe"):
             break
-        for row in db.rows("SELECT name, age FROM Person WHERE name = ?", "John Doe"):
+        for row in db.all("SELECT name, age FROM Person WHERE name = ?", "John Doe"):
             break
+
+test "db.one":
+    withDb:
+        discard db.one(SelectPersons).get.unpack((string, int))
+        check db.one(SelectJohnDoe).get[0].strVal == "John Doe"
+        check db.one("SELECT * FROM Person WHERE name = ?", "John Person") == none(seq[DbValue])
+
+test "db.value":
+    withDb:
+        db.exec("PRAGMA user_version = 1")
+        check db.value("PRAGMA user_version").get.intVal == 1
 
 test "db.exec":
     withDb:
@@ -44,10 +55,10 @@ test "db.exec":
             VALUES(?, ?)
         """, "John Persson", 103)
         check db.changes == 1
-        let rows = db.rows(SelectPersons)
+        let rows = db.all(SelectPersons)
         check rows.len == 3
         db.exec("DELETE FROM Person WHERE name = ?", "John Persson")
-        check db.rows(SelectPersons).len == 2
+        check db.all(SelectPersons).len == 2
 
 test "db.execMany with failure":
     withDb:
@@ -56,7 +67,7 @@ test "db.execMany with failure":
                 INSERT INTO Person(name, age)
                 VALUES(?, ?)
             """, @[@[toDbValue("John Doe"), toDbValue(23)], @[toDbValue("Jane Doe")]])
-        let rows = db.rows(SelectPersons)
+        let rows = db.all(SelectPersons)
         check rows.len == 2
 
 # Fails - known bug
@@ -68,7 +79,7 @@ when false:
                     INSERT INTO Person(name, age)
                     VALUES(?, ?)
                 """, @[@[toDbValue("John Doe"), toDbValue(23)], @[toDbValue("Jane Doe"), toDbValue(20)]])
-                let rows = db.rows(SelectPersons)
+                let rows = db.all(SelectPersons)
                 check rows.len == 2  
 
 test "db.execScript with failure":
@@ -82,7 +93,7 @@ test "db.execScript with failure":
                     INSERT INTO Wrong(field)
                     VALUES(10);
             """)
-        let rows = db.rows(SelectPersons)
+        let rows = db.all(SelectPersons)
         check rows.len == 2
 
 test "db.execScript in transaction":
@@ -96,7 +107,7 @@ test "db.execScript in transaction":
                     INSERT INTO Wrong(field)
                     VALUES(10);
             """)
-        let rows = db.rows(SelectPersons)
+        let rows = db.all(SelectPersons)
         check rows.len == 2
 
 test "db.transaction with return":
@@ -106,10 +117,10 @@ test "db.transaction with return":
                 db.exec("INSERT INTO Person(name, age) VALUES('John Persson', 103)")
                 return
         fun()
-        let rows = db.rows("SELECT * FROM Person")
+        let rows = db.all("SELECT * FROM Person")
         check rows.len == 3
         db.exec("DELETE FROM Person WHERE name = 'John Persson'")
-        check db.rows("SELECT name, age FROM Person").len == 2
+        check db.all("SELECT name, age FROM Person").len == 2
 
 
 test "db.transaction with exception":
@@ -122,13 +133,13 @@ test "db.transaction with exception":
             fun()
         except:
             discard
-        check db.rows("SELECT name, age FROM Person").len == 2
+        check db.all("SELECT name, age FROM Person").len == 2
 
 test "db.transaction nesting":
     withDb:
         db.transaction:
             db.transaction:
-                check db.rows(SelectPersons).len == 2
+                check db.all(SelectPersons).len == 2
 
 test "db.isInTransaction":
     withDb:
@@ -159,17 +170,17 @@ test "db.close twice":
 
 test "row.unpack":
     withDb:
-        let row = db.rows(SelectJohnDoe)[0]
+        let row = db.one(SelectJohnDoe).get
         let (name, age) = row.unpack((string, int))
-        doAssert (name, age) == ("John Doe", 47)
+        check (name, age) == ("John Doe", 47)
         expect AssertionError:
             discard row.unpack(tuple[name: string])
 
 test "cacheSize=0":
     let db = openDatabase(":memory:", cacheSize = 0)
     db.execScript(seedScript)
-    discard db.rows(SelectPersons)
-    discard db.rows(SelectPersons)
+    discard db.all(SelectPersons)
+    discard db.all(SelectPersons)
     db.close()
 
 test "SqliteError":
@@ -186,7 +197,7 @@ test "SqliteError":
 
 test "Type mappings":
     withDb:
-        let rows = db.rows("SELECT * FROM Types")
+        let rows = db.all("SELECT * FROM Types")
         check rows.len == 1
         block:
             let unpackedRow = rows[0].unpack((string, int, float, Option[int], seq[byte]))
