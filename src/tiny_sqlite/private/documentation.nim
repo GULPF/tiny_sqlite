@@ -36,10 +36,14 @@ db.exec("""
 
 ### Reading data
 
-To read data from the database, the `row` iterator and proc is used.
+Three different procs for reading data are available:
+
+- `all`: returns all result rows
+- `one`: returns the first result row, or `none` if not result row exists
+- `value`: returns the first column of the first row, or `none` if not result row exists
 
 ```nim
-for row in db.rows("SELECT name, age FROM Person"):
+for row in db.all("SELECT name, age FROM Person"):
     # The `row` variable is of type `seq[DbValue]`.
     # Each column value can be converted to a normal
     # Nim type with the `fromDbValue` proc

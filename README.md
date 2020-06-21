@@ -36,7 +36,7 @@ VALUES
 
 db.exec("INSERT INTO Person VALUES(?, ?)", "Jane Doe", nil)
 
-for row in db.rows("SELECT name, age FROM Person"):
+for row in db.all("SELECT name, age FROM Person"):
     let (name, age) = row.unpack((string, Option[int]))
     echo name, " ", age
 

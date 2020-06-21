@@ -175,6 +175,18 @@ proc `$`*(dbVal: DbValue): string =
     of sqliteNull:    result.add "nil"
     result.add "]"
 
+proc `==`*(a, b: DbValue): bool =
+    ## Returns true if `a` and `b` represents the same value.
+    if a.kind != b.kind:
+        false
+    else:
+        case a.kind
+        of sqliteInteger: a.intVal == b.intVal
+        of sqliteReal:    a.floatVal == b.floatVal
+        of sqliteText:    a.strVal == b.strVal
+        of sqliteBlob:    a.blobVal == b.blobVal
+        of sqliteNull:    true
+
 proc exec*(db: DbConn, sql: string, params: varargs[DbValue, toDbValue]) =
     ## Executes ``sql``, which must be a single SQL statement.
     assertDbOpen db
@@ -254,7 +266,7 @@ proc readColumn(prepared: PreparedSql, col: int32): DbValue =
     else:
         raiseAssert "Unexpected column type: " & $columnType
 
-iterator rows*(db: DbConn, sql: string,
+iterator all*(db: DbConn, sql: string,
                params: varargs[DbValue, toDbValue]): seq[DbValue] =
     ## Executes ``sql`` and yields each resulting row.
     assertDbOpen db
@@ -282,11 +294,25 @@ iterator rows*(db: DbConn, sql: string,
             discard sqlite.finalize(prepared)
         db.checkRc(errorRc)
 
-proc rows*(db: DbConn, sql: string,
+proc all*(db: DbConn, sql: string,
            params: varargs[DbValue, toDbValue]): seq[seq[DbValue]] =
     ## Executes ``sql`` and returns all resulting rows.
-    for row in db.rows(sql, params):
+    for row in db.all(sql, params):
         result.add row
+
+proc one*(db: DbConn, sql: string,
+        params: varargs[DbValue, toDbValue]): Option[seq[DbValue]] =
+    ## Executes `sql` and returns the first row found.
+    ## Returns `none(seq[DbValue])` if no result was found.
+    for row in db.all(sql, params):
+        return some(row)
+
+proc value*(db: DbConn, sql: string,
+        params: varargs[DbValue, toDbValue]): Option[DbValue] =
+    ## Executes `sql` and returns the first column of the first row found. 
+    ## Returns `none(DbValue)` if no result was found.
+    for row in db.all(sql, params):
+        return some(row[0])
 
 proc openDatabase*(path: string, mode = dbReadWrite, cacheSize = 50): DbConn =
     ## Open a new database connection to a database file. To create a
@@ -359,3 +385,14 @@ proc unsafeHandle*(db: DbConn): sqlite.PSqlite3 {.inline.} =
     ## been called as doing so would break memory safety.
     assert not DbConnImpl(db).handle.isNil, "Database is closed"
     DbConnImpl(db).handle
+
+# Deprecations
+
+proc rows*(db: DbConn, sql: string,
+        params: varargs[DbValue, toDbValue]): seq[seq[DbValue]] {.deprecated: "use 'all' instead".} =
+    db.all(sql, params)
+    
+iterator rows*(db: DbConn, sql: string,
+        params: varargs[DbValue, toDbValue]): seq[DbValue] {.deprecated: "use 'all' instead".} =
+    for row in db.all(sql, params):
+        yield row
