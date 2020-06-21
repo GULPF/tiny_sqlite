@@ -158,6 +158,8 @@ proc fromDbValue*[T](val: DbValue, _: typedesc[Option[T]]): Option[T] =
 proc unpack*[T: tuple](row: openArray[DbValue], _: typedesc[T]): T =
     ## Call ``fromDbValue`` on each element of ``row`` and return it
     ## as a tuple.
+    doAssert row.len == result.tupleLen,
+        "Unpack expected a tuple with " & $row.len & " field(s) but found: " & $T
     var idx = 0
     for value in result.fields:
         value = row[idx].fromDbValue(type(value))
@@ -187,7 +189,8 @@ proc exec*(db: DbConn, sql: string, params: varargs[DbValue, toDbValue]) =
     db.checkRc(rc)
 
 template transaction*(db: DbConn, body: untyped) =
-    # Nested transactions are not supported in SQLite so we make it a no-op
+    ## Starts a transaction and runs `body` within it. At the end the transaction is commited.
+    ## If an error is raised by `body` the transaction is rolled back. Nested transactions is a no-op.
     if db.isInTransaction:
         body
     else:
@@ -253,7 +256,7 @@ proc readColumn(prepared: PreparedSql, col: int32): DbValue =
 
 iterator rows*(db: DbConn, sql: string,
                params: varargs[DbValue, toDbValue]): seq[DbValue] =
-    ## Executes ``sql`` and yield each resulting row.
+    ## Executes ``sql`` and yields each resulting row.
     assertDbOpen db
     let prepared = db.prepareSql(sql, @params)
     var errorRc: int32 = sqlite.SQLITE_OK
@@ -311,8 +314,7 @@ proc openDatabase*(path: string, mode = dbReadWrite, cacheSize = 50): DbConn =
 
 proc close*(db: DbConn) =
     ## Closes the database connection. This should be called once the connection will no longer be used
-    ## to avoid leaking memory.
-    assertDbOpen db
+    ## to avoid leaking memory. Closing an already closed database is a harmless no-op.
     for prepared in db.cache.values:
         let rc = sqlite.finalize(prepared)
         db.checkRc(rc)
@@ -351,8 +353,9 @@ proc isInTransaction*(db: DbConn): bool =
     ## Returns true if a transaction is currently active.
     sqlite.get_autocommit(db.handle) == 0
 
-proc handle*(db: DbConn): sqlite.PSqlite3 {.inline.} =
+proc unsafeHandle*(db: DbConn): sqlite.PSqlite3 {.inline.} =
     ## Returns the raw SQLite3 handle. This can be used to interact directly with the SQLite C API
-    ## with the `tiny_sqlite/sqlite_wrapper` module.
+    ## with the `tiny_sqlite/sqlite_wrapper` module. Note that the handle should not be used after `db.close` has
+    ## been called as doing so would break memory safety.
     assert not DbConnImpl(db).handle.isNil, "Database is closed"
     DbConnImpl(db).handle

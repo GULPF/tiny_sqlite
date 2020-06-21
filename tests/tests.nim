@@ -2,6 +2,7 @@ import std / [unittest, options, sequtils]
 import .. / src / tiny_sqlite
 
 const SelectPersons = "SELECT name, age FROM Person"
+const SelectJohnDoe = "SELECT name, age FROM Person WHERE name = 'John Doe'"
 type SelectPersonsRowType = tuple[name: string, age: Option[int]]
 
 proc writePersons(db: DbConn) {.used.} =
@@ -150,6 +151,19 @@ test "db.isReadonly":
         let readonlyDb = openDatabase(":memory:", dbRead)
         check readonlyDb.isReadonly
         readonlyDb.close()
+
+test "db.close twice":
+    let db = openDatabase(":memory:")
+    db.close()
+    db.close()
+
+test "row.unpack":
+    withDb:
+        let row = db.rows(SelectJohnDoe)[0]
+        let (name, age) = row.unpack((string, int))
+        doAssert (name, age) == ("John Doe", 47)
+        expect AssertionError:
+            discard row.unpack(tuple[name: string])
 
 test "cacheSize=0":
     let db = openDatabase(":memory:", cacheSize = 0)
