@@ -1,6 +1,6 @@
 include tiny_sqlite / private / documentation
 
-import std / [options, macros, typetraits, tables]
+import std / [options, macros, typetraits, tables, sequtils]
 from tiny_sqlite/sqlite_wrapper as sqlite import nil
 
 type
@@ -43,6 +43,10 @@ type
             blobVal*: seq[byte]
         of sqliteNull:
             discard
+
+    ResultRow* = object
+        values: seq[DbValue]
+        columns: seq[string]
 
     DbConnOrHandle = DbConn | sqlite.PSqlite3
 
@@ -155,7 +159,7 @@ proc fromDbValue*[T](val: DbValue, _: typedesc[Option[T]]): Option[T] =
     else:
         some(val.fromDbValue(T))
 
-proc unpack*[T: tuple](row: openArray[DbValue], _: typedesc[T]): T =
+proc unpack*[T: tuple](row: ResultRow, _: typedesc[T]): T =
     ## Call ``fromDbValue`` on each element of ``row`` and return it
     ## as a tuple.
     doAssert row.len == result.tupleLen,
@@ -267,19 +271,22 @@ proc readColumn(prepared: PreparedSql, col: int32): DbValue =
         raiseAssert "Unexpected column type: " & $columnType
 
 iterator all*(db: DbConn, sql: string,
-               params: varargs[DbValue, toDbValue]): seq[DbValue] =
+               params: varargs[DbValue, toDbValue]): ResultRow =
     ## Executes ``sql`` and yields each resulting row.
     assertDbOpen db
     let prepared = db.prepareSql(sql, @params)
     var errorRc: int32 = sqlite.SQLITE_OK
     try:
-        var row = newSeq[DbValue](sqlite.column_count(prepared))
+        var rowLen = sqlite.column_count(prepared)
+        var values = newSeq[DbValue](rowLen)
+        var columns = newSeq[string](rowLen)
         while true:
             let rc = sqlite.step(prepared)
             if rc == sqlite.SQLITE_ROW:
-                for col, _ in row:
-                    row[col] = readColumn(prepared, col.int32)
-                yield row
+                for idx in 0 ..< rowLen:
+                    values[idx] = readColumn(prepared, idx)
+                    columns[idx] = $sqlite.column_name(prepared, idx)
+                yield ResultRow(values: values, columns: columns)
             elif rc == sqlite.SQLITE_DONE:
                 break
             else:
@@ -295,13 +302,13 @@ iterator all*(db: DbConn, sql: string,
         db.checkRc(errorRc)
 
 proc all*(db: DbConn, sql: string,
-           params: varargs[DbValue, toDbValue]): seq[seq[DbValue]] =
+        params: varargs[DbValue, toDbValue]): seq[ResultRow] =
     ## Executes ``sql`` and returns all resulting rows.
     for row in db.all(sql, params):
         result.add row
 
 proc one*(db: DbConn, sql: string,
-        params: varargs[DbValue, toDbValue]): Option[seq[DbValue]] =
+        params: varargs[DbValue, toDbValue]): Option[ResultRow] =
     ## Executes `sql` and returns the first row found.
     ## Returns `none(seq[DbValue])` if no result was found.
     for row in db.all(sql, params):
@@ -312,7 +319,7 @@ proc value*(db: DbConn, sql: string,
     ## Executes `sql` and returns the first column of the first row found. 
     ## Returns `none(DbValue)` if no result was found.
     for row in db.all(sql, params):
-        return some(row[0])
+        return some(row.values[0])
 
 proc openDatabase*(path: string, mode = dbReadWrite, cacheSize = 50): DbConn =
     ## Open a new database connection to a database file. To create a
@@ -386,13 +393,34 @@ proc unsafeHandle*(db: DbConn): sqlite.PSqlite3 {.inline.} =
     assert not DbConnImpl(db).handle.isNil, "Database is closed"
     DbConnImpl(db).handle
 
+proc `[]`*(row: ResultRow, idx: int): DbValue =
+    row.values[idx]
+
+proc `[]`*(row: ResultRow, column: string): DbValue =
+    let idx = row.columns.find(column)
+    doAssert idx != -1, "Column does not exist in row: '" & column & "'"
+    doAssert count(row.columns, column) == 1, "Column exists multiple times in row: '" & column & "'"
+    row.values[idx]
+
+proc len*(row: ResultRow): int =
+    row.values.len
+
+proc values*(row: ResultRow): seq[DbValue] =
+    row.values
+
+proc columns*(row: ResultRow): seq[string] =
+    row.columns
+
 # Deprecations
 
 proc rows*(db: DbConn, sql: string,
-        params: varargs[DbValue, toDbValue]): seq[seq[DbValue]] {.deprecated: "use 'all' instead".} =
+        params: varargs[DbValue, toDbValue]): seq[ResultRow] {.deprecated: "use 'all' instead".} =
     db.all(sql, params)
     
 iterator rows*(db: DbConn, sql: string,
-        params: varargs[DbValue, toDbValue]): seq[DbValue] {.deprecated: "use 'all' instead".} =
+        params: varargs[DbValue, toDbValue]): ResultRow {.deprecated: "use 'all' instead".} =
     for row in db.all(sql, params):
         yield row
+
+proc unpack*[T: tuple](row: seq[DbValue], _: typedesc[T]): T {.deprecated.} =
+    ResultRow(values: row).unpact(T)

@@ -41,7 +41,7 @@ test "db.one":
     withDb:
         discard db.one(SelectPersons).get.unpack((string, int))
         check db.one(SelectJohnDoe).get[0].strVal == "John Doe"
-        check db.one("SELECT * FROM Person WHERE name = ?", "John Person") == none(seq[DbValue])
+        check db.one("SELECT * FROM Person WHERE name = ?", "John Person") == none(ResultRow)
 
 test "db.value":
     withDb:
@@ -182,6 +182,14 @@ test "cacheSize=0":
     discard db.all(SelectPersons)
     discard db.all(SelectPersons)
     db.close()
+
+test "ResultRow":
+    withDb:
+        let row = db.one(SelectPersons).get
+        doAssert row["name"].strVal == "John Doe"
+        doAssert row[0].strVal == "John Doe"
+        doAssert row["age"].intVal == 47
+        doAssert row[1].intVal == 47
 
 test "SqliteError":
     withDb:
