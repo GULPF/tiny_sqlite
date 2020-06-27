@@ -381,9 +381,15 @@ const
   SQLITE_OPEN_PRIVATECACHE* =    0x00040000  #/* Ok for sqlite3_open_v2() */
   SQLITE_OPEN_WAL* =             0x00080000    #/* VFS only */
 
-proc open_v2*(filename: cstring, ppDb : var PSqlite3,
-                      flags : int32 , zVfsName : cstring ): int32 {.
-                        cdecl,dynlib: Lib,importc: "sqlite3_open_v2".}
+proc open_v2*(filename: cstring, db: var PSqlite3, flags : int32 , zVfsName : cstring ): int32
+    {.cdecl, dynlib: Lib, importc: "sqlite3_open_v2".}
 
-proc db_readonly*(ppDb: PSqlite3, dbname : cstring): int32 {.
-                        cdecl,dynlib: Lib,importc: "sqlite3_db_readonly".}
+proc db_readonly*(db: PSqlite3, dbname: cstring): int32
+    {.cdecl, dynlib: Lib, importc: "sqlite3_db_readonly".}
+
+proc next_stmt*(db: PSqlite3, stmt: PStmt): PStmt
+    {.cdecl, dynlib: Lib, importc: "sqlite3_next_stmt".}
+
+
+proc stmt_busy*(stmt: PStmt): bool
+    {.cdecl, dynlib: Lib, importc: "sqlite3_stmt_busy".}
