@@ -13,12 +13,13 @@ proc writePersons(db: DbConn) {.used.} =
 const seedScript = staticRead("./seed_test_db.sql")
 
 template withDb(body: untyped) =
-    let db {.inject.}= openDatabase(":memory:")
-    db.execScript(seedScript)
-    try:
-        body
-    finally:
-        db.close()
+    block:
+        let db {.inject.}= openDatabase(":memory:")
+        db.execScript(seedScript)
+        try:
+            body
+        finally:
+            db.close()
 
 test "db.all":
     withDb:
@@ -37,6 +38,12 @@ test "db.all with break":
         for row in db.all("SELECT name, age FROM Person WHERE name = ?", "John Doe"):
             break
 
+test "db.iterate close":
+    withDb:
+        expect AssertionError:
+            for row in db.iterate(SelectPersons):
+                db.close()
+
 test "db.one":
     withDb:
         discard db.one(SelectPersons).get.unpack((string, int))
@@ -47,6 +54,10 @@ test "db.value":
     withDb:
         db.exec("PRAGMA user_version = 1")
         check db.value("PRAGMA user_version").get.intVal == 1
+
+test "db.value no rows":
+    withDb:
+        check db.value("SELECT * FROM Person Where age = 0") == none(DbValue)
 
 test "db.exec":
     withDb:
@@ -70,17 +81,15 @@ test "db.execMany with failure":
         let rows = db.all(SelectPersons)
         check rows.len == 2
 
-# Fails - known bug
-when false:
-    test "db.execMany in transaction":
-        withDb:
-            transaction:
-                db.execMany("""
-                    INSERT INTO Person(name, age)
-                    VALUES(?, ?)
-                """, @[@[toDbValue("John Doe"), toDbValue(23)], @[toDbValue("Jane Doe"), toDbValue(20)]])
-                let rows = db.all(SelectPersons)
-                check rows.len == 2  
+test "db.execMany in transaction":
+    withDb:
+        db.transaction:
+            db.execMany("""
+                INSERT INTO Person(name, age)
+                VALUES(?, ?)
+            """, @[@[toDbValue("John Doe"), toDbValue(23)], @[toDbValue("Jane Doe"), toDbValue(20)]])
+            let rows = db.all(SelectPersons)
+            check rows.len == 4
 
 test "db.execScript with failure":
     withDb:
@@ -151,10 +160,14 @@ test "db.isInTransaction":
 test "db.isOpen":
     var db: DbConn
     check not db.isOpen
+    expect AssertionError:
+        discard db.all(SelectPersons)
     db = openDatabase(":memory:")
     check db.isOpen
     db.close()
     check not db.isOpen
+    expect AssertionError:
+        discard db.all(SelectPersons)
 
 test "db.isReadonly":
     withDb:
@@ -168,6 +181,17 @@ test "db.close twice":
     db.close()
     db.close()
 
+test "db.close with live statements":
+    let db = openDatabase(":memory:")
+    db.execScript(seedScript)
+    let stmt {.used.} = db.stmt(SelectPersons)
+    db.close()
+    check not stmt.isAlive
+
+test "db.close default value":
+    var db: DbConn
+    db.close()
+
 test "row.unpack":
     withDb:
         let row = db.one(SelectJohnDoe).get
@@ -175,6 +199,79 @@ test "row.unpack":
         check (name, age) == ("John Doe", 47)
         expect AssertionError:
             discard row.unpack(tuple[name: string])
+
+test "stmt.all":
+    withDb:
+        let stmt = db.stmt(SelectPersons)
+        for i in 0 .. 1:
+            let rows = stmt.all()
+            check rows.len == 2
+            let unpackedRows = rows.mapIt(it.unpack(SelectPersonsRowType))
+            check unpackedRows.anyIt(it.name == "John Doe" and it.age == some(47))
+            check unpackedRows.anyIt(it.name == "Jane Doe" and it.age == none(int))
+        stmt.finalize()
+
+    withDb:
+        let stmt = db.stmt("SELECT name, age FROM Person WHERE name = ?")
+        expect SqliteError:
+            discard stmt.all()
+        var rows = stmt.all("John Doe")
+        check rows.len == 1
+        check rows[0][0].fromDbValue(string) == "John Doe"
+        check rows[0][1].fromDbValue(int) == 47
+        rows = stmt.all("Jane Doe")
+        check rows.len == 1
+        check rows[0][0].fromDbValue(string) == "Jane Doe"
+        check rows[0][1].fromDbValue(Option[int]) == none(int)
+        stmt.finalize()
+
+test "stmt.iterate busy":
+    withDb:
+        let stmt = db.stmt(SelectPersons)
+        for row in stmt.iterate():
+            expect AssertionError:
+                discard stmt.all()
+            expect AssertionError:
+                discard stmt.one()
+            expect AssertionError:
+                discard stmt.value()
+            expect AssertionError:
+                stmt.exec()
+
+test "stmt.iterate close/finalize":
+    withDb:
+        let stmt = db.stmt(SelectPersons)
+        expect AssertionError:
+            for row in stmt.iterate():
+                db.close()
+    withDb:
+        let stmt = db.stmt(SelectPersons)
+        expect AssertionError:
+            for row in stmt.iterate():
+                stmt.finalize()
+
+test "stmt.isAlive":
+    withDb:
+        var stmt: SqlStatement
+        check not stmt.isAlive
+        expect AssertionError:
+            discard stmt.all()
+        stmt = db.stmt(SelectPersons)
+        check stmt.isAlive
+        stmt.finalize()
+        check not stmt.isAlive
+        expect AssertionError:
+            discard stmt.all()
+
+test "stmt.finalize twice":
+    withDb:
+        let stmt = db.stmt(SelectPersons)
+        stmt.finalize()
+        stmt.finalize()
+
+test "stmt.finalize default value":
+    var stmt: SqlStatement
+    stmt.finalize()
 
 test "cacheSize=0":
     let db = openDatabase(":memory:", cacheSize = 0)
@@ -190,6 +287,12 @@ test "ResultRow":
         doAssert row[0].strVal == "John Doe"
         doAssert row["age"].intVal == 47
         doAssert row[1].intVal == 47
+
+    withDb:
+        let row = db.one("SELECT a.name, b.name FROM Person a JOIN Person b").get
+        check row.columns == @["name", "name"]
+        expect AssertionError:
+            discard row["name"]
 
 test "SqliteError":
     withDb:
