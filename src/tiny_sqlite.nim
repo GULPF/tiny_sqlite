@@ -5,16 +5,16 @@ from tiny_sqlite / sqlite_wrapper as sqlite import nil
 
 type
     DbConnImpl = ref object 
-        handle: sqlite.PSqlite3 ## The underlying SQLite3 handle
+        handle: sqlite.Sqlite3 ## The underlying SQLite3 handle
         cache: OrderedTable[string, PreparedSql]
         cacheSize: int
 
     DbConn* = distinct DbConnImpl ## Encapsulates a database connection.
 
-    PreparedSql = sqlite.Pstmt
+    PreparedSql = sqlite.Stmt
 
     SqlStatementImpl = ref object
-        handle: sqlite.Pstmt
+        handle: sqlite.Stmt
         db: DbConn
 
     SqlStatement* = distinct SqlStatementImpl
@@ -50,11 +50,11 @@ type
         of sqliteNull:
             discard
 
+    Rc = cint
+
     ResultRow* = object
         values: seq[DbValue]
         columns: seq[string]
-
-    Rc = int32
 
 const SqliteRcOk = [ sqlite.SQLITE_OK, sqlite.SQLITE_DONE, sqlite.SQLITE_ROW ]
 
@@ -63,8 +63,8 @@ const SqliteRcOk = [ sqlite.SQLITE_OK, sqlite.SQLITE_DONE, sqlite.SQLITE_ROW ]
 proc isInTransaction*(db: DbConn): bool {.noSideEffect.}
 proc isOpen*(db: DbConn): bool {.noSideEffect, inline.}
 
-template handle(db: DbConn): sqlite.PSqlite3 = DbConnImpl(db).handle
-template handle(statement: SqlStatement): sqlite.Pstmt = SqlStatementImpl(statement).handle
+template handle(db: DbConn): sqlite.Sqlite3 = DbConnImpl(db).handle
+template handle(statement: SqlStatement): sqlite.Stmt = SqlStatementImpl(statement).handle
 template db(statement: SqlStatement): DbConn = SqlStatementImpl(statement).db
 template cache(db: DbConn): OrderedTable[string, PreparedSql] = DbConnImpl(db).cache
 template cacheSize(db: DbConn): int = DbConnImpl(db).cacheSize
@@ -407,7 +407,7 @@ proc isInTransaction*(db: DbConn): bool =
     ## Returns true if a transaction is currently active.
     sqlite.get_autocommit(db.handle) == 0
 
-proc unsafeHandle*(db: DbConn): sqlite.PSqlite3 {.inline.} =
+proc unsafeHandle*(db: DbConn): sqlite.Sqlite3 {.inline.} =
     ## Returns the raw SQLite3 handle. This can be used to interact directly with the SQLite C API
     ## with the `tiny_sqlite/sqlite_wrapper` module. Note that the handle should not be used after `db.close` has
     ## been called as doing so would break memory safety.
@@ -494,7 +494,7 @@ proc openDatabase*(path: string, mode = dbReadWrite, cacheSize = 50): DbConn =
     ## database connection is no longer needed.
     runnableExamples:
         let memDb = openDatabase(":memory:")
-    var handle: sqlite.PSqlite3
+    var handle: sqlite.Sqlite3
     let db = new DbConnImpl
     db.handle = handle
     db.cacheSize = cacheSize

@@ -15,11 +15,12 @@ jobs:
   # This workflow contains a single job called "build"
   build:
     # The type of runner that the job will run on
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
 
     strategy:
       matrix:
         nim: [ 'devel', 'stable' ]
+        os: [ 'ubuntu-latest', 'windows-latest' ]
 
     # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
@@ -27,8 +28,9 @@ jobs:
     - uses: actions/checkout@v2
 
     - name: Setup Nim environment
-      uses: jiro4989/setup-nim-action@v1.0.2
+      uses: jiro4989/setup-nim-action@v1.1.2
       with:
         nim-version: ${{ matrix.nim }}
 
     - run: nimble test -Y
+    - run: nimble install
