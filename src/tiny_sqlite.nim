@@ -97,7 +97,6 @@ proc addToCache(db: DbConn, sql: string, prepared: PreparedSql): void =
     db.cache[sql] = prepared
     if db.cache.len > db.cacheSize:
         for k, v in db.cache:
-            # Discard rc: rc can be ignored - an error code does not indicate that finalize failed
             discard sqlite.finalize(v)
             db.cache.del k
             break
@@ -107,43 +106,74 @@ proc addToCache(db: DbConn, sql: string, prepared: PreparedSql): void =
 #
 
 proc toDbValue*[T: Ordinal](val: T): DbValue =
+    ## Convert an ordinal value to a Dbvalue.
     DbValue(kind: sqliteInteger, intVal: val.int64)
 
 proc toDbValue*[T: SomeFloat](val: T): DbValue =
+    ## Convert a float to a DbValue.
     DbValue(kind: sqliteReal, floatVal: val)
 
 proc toDbValue*[T: string](val: T): DbValue =
+    ## Convert a string to a DbValue.
     DbValue(kind: sqliteText, strVal: val)
 
 proc toDbValue*[T: seq[byte]](val: T): DbValue =
+    ## Convert a sequence of bytes to a DbValue.
     DbValue(kind: sqliteBlob, blobVal: val)
 
 proc toDbValue*[T: Option](val: T): DbValue =
+    ## Convert an optional value to a DbValue.
     if val.isNone:
         DbValue(kind: sqliteNull)
     else:
         toDbValue(val.get)
 
 proc toDbValue*[T: type(nil)](val: T): DbValue =
+    ## Convert a nil literal to a DbValue.
     DbValue(kind: sqliteNull)
 
-proc toDbValues*(values: varargs[DbValue, toDbValue]): seq[DbValue] = @values
+proc toDbValues*(values: varargs[DbValue, toDbValue]): seq[DbValue] =
+    ## Convert several values to a sequence of DbValue's.
+    runnableExamples:
+        doAssert toDbValues("string", 23) == @[toDbValue("string"), toDbValue(23)] 
+    @values
 
-proc fromDbValue*(value: DbValue, T: typedesc[Ordinal]): T = value.intval.T
+proc fromDbValue*(value: DbValue, T: typedesc[Ordinal]): T =
+    # Convert a DbValue to an ordinal.
+    value.intval.T
 
-proc fromDbValue*(value: DbValue, T: typedesc[SomeFloat]): float64 = value.floatVal
+proc fromDbValue*(value: DbValue, T: typedesc[SomeFloat]): float64 =
+    ## Convert a DbValue to a float.
+    value.floatVal
 
-proc fromDbValue*(value: DbValue, T: typedesc[string]): string = value.strVal
+proc fromDbValue*(value: DbValue, T: typedesc[string]): string =
+    ## Convert a DbValue to a string.
+    value.strVal
 
-proc fromDbValue*(value: DbValue, T: typedesc[seq[byte]]): seq[byte] = value.blobVal
-
-proc fromDbValue*(value: DbValue, T: typedesc[DbValue]): T = value
+proc fromDbValue*(value: DbValue, T: typedesc[seq[byte]]): seq[byte] =
+    ## Convert a DbValue to a sequence of bytes.
+    value.blobVal
 
 proc fromDbValue*[T](value: DbValue, _: typedesc[Option[T]]): Option[T] =
+    ## Convert a DbValue to an optional value.
     if value.kind == sqliteNull:
         none(T)
     else:
         some(value.fromDbValue(T))
+
+proc fromDbValue*(value: DbValue, T: typedesc[DbValue]): T =
+    ## Special overload that simply return `value`.
+    ## The purpose of this overload is to do partial unpacking.
+    ## For example, if the type of one column in a result row is unknown,
+    ## the DbValue type can be kept just for that column.
+    ## 
+    ## .. code-block:: nim
+    ## 
+    ##   for row in db.iterate("SELECT name, extra FROM Person"):
+    ##       # Type of 'extra' is unknown, so we don't unpack it.
+    ##       # The 'extra' variable will be of type 'DbValue'
+    ##       let (name, extra) = row.unpack((string, DbValue))
+    value
 
 proc `$`*(dbVal: DbValue): string =
     result.add "DbValue["
@@ -269,11 +299,14 @@ iterator iterate(db: DbConn, stmtOrHandle: PreparedSql | SqlStatement, params: v
 
 proc exec*(db: DbConn, sql: string, params: varargs[DbValue, toDbValue]) =
     ## Executes ``sql``, which must be a single SQL statement.
+    runnableExamples:
+        let db = openDatabase(":memory:")
+        db.exec("CREATE TABLE Person(name, age)")
+        db.exec("INSERT INTO Person(name, age) VALUES(?, ?)",
+            "John Doe", 23)
     assertCanUseDb db
     let prepared = db.prepareSql(sql, @params)
     let rc = sqlite.step(prepared)
-    # Discard rc: Discarding return code here is OK as reset & finalize will never return
-    # an error code if step didn't return an error code.
     if db.cacheSize > 0:
         discard sqlite.reset(prepared)
     else:
@@ -300,8 +333,8 @@ template transaction*(db: DbConn, body: untyped) =
                 db.exec("COMMIT")
 
 proc execMany*(db: DbConn, sql: string, params: seq[seq[DbValue]]) =
-    ## Executes ``sql`` repeatedly using each element of ``params`` as parameters.
-    ## The statements are executed inside a transaction.
+    ## Executes ``sql``, which must be a single SQL statement, repeatedly using each element of
+    ## ``params`` as parameters. The statements are executed inside a transaction.
     assertCanUseDb db
     db.transaction:
         for p in params:
@@ -319,15 +352,13 @@ proc execScript*(db: DbConn, sql: string) =
             var rc = sqlite.prepare_v2(db.handle, remaining, sql.len.cint, prepared, tail)
             db.checkRc(rc)
             rc = sqlite.step(prepared)
-            # Discard rc: Discarding return code here is OK as finalize will never return
-            # an error code if step didn't return an error code.
             discard sqlite.finalize(prepared)
             db.checkRc(rc)
             remaining = tail
 
 iterator iterate*(db: DbConn, sql: string,
         params: varargs[DbValue, toDbValue]): ResultRow =
-    ## Executes ``sql`` and yields each row one by one.
+    ## Executes ``sql``, which must be a single SQL statement, and yields each result row one by one.
     assertCanUseDb db
     let prepared = db.prepareSql(sql, @params)
     var errorRc: int32
@@ -346,22 +377,22 @@ iterator iterate*(db: DbConn, sql: string,
 
 proc all*(db: DbConn, sql: string,
         params: varargs[DbValue, toDbValue]): seq[ResultRow] =
-    ## Executes ``sql`` and returns all resulting rows.
+    ## Executes ``sql``, which must be a single SQL statement, and returns all result rows.
     for row in db.iterate(sql, params):
         result.add row
 
 proc one*(db: DbConn, sql: string,
         params: varargs[DbValue, toDbValue]): Option[ResultRow] =
-    ## Executes `sql` and returns the first row found.
-    ## Returns `none(seq[DbValue])` if no result was found.
-    for row in db.all(sql, params):
+    ## Executes `sql`, which must be a single SQL statement, and returns the first result row.
+    ## Returns `none(seq[DbValue])` if the result was empty.
+    for row in db.iterate(sql, params):
         return some(row)
 
 proc value*(db: DbConn, sql: string,
         params: varargs[DbValue, toDbValue]): Option[DbValue] =
-    ## Executes `sql` and returns the first column of the first row found. 
-    ## Returns `none(DbValue)` if no result was found.
-    for row in db.all(sql, params):
+    ## Executes `sql`, which must be a single SQL statement, and returns the first column of the first result row.
+    ## Returns `none(DbValue)` if the result was empty.
+    for row in db.iterate(sql, params):
         return some(row.values[0])
 
 proc close*(db: DbConn) =
@@ -399,14 +430,33 @@ proc changes*(db: DbConn): int32 =
 
 proc isReadonly*(db: DbConn): bool =
     ## Returns true if ``db`` is in readonly mode.
+    runnableExamples:
+        let db = openDatabase(":memory:")
+        doAssert not db.isReadonly
+        let db2 = openDatabase(":memory:", dbRead)
+        doAssert db2.isReadonly
     assertCanUseDb db
     sqlite.db_readonly(db.handle, "main") == 1
 
 proc isOpen*(db: DbConn): bool {.inline.} =
+    ## Returns true if `db` has been opened and not yet closed.
+    runnableExamples:
+        var db: DbConn
+        doAssert not db.isOpen
+        db = openDatabase(":memory:")
+        doAssert db.isOpen
+        db.close()
+        doAssert not db.isOpen
     (not DbConnImpl(db).isNil) and (not db.handle.isNil)
 
 proc isInTransaction*(db: DbConn): bool =
     ## Returns true if a transaction is currently active.
+    runnableExamples:
+        let db = openDatabase(":memory:")
+        doAssert not db.isInTransaction
+        db.transaction:
+            doAssert db.isInTransaction
+    assertCanUseDb db
     sqlite.get_autocommit(db.handle) == 0
 
 proc unsafeHandle*(db: DbConn): sqlite.Sqlite3 {.inline.} =
@@ -421,10 +471,13 @@ proc unsafeHandle*(db: DbConn): sqlite.Sqlite3 {.inline.} =
 #
 
 proc stmt*(db: DbConn, sql: string): SqlStatement =
+    ## Constructs a prepared statement from `sql`.
+    assertCanUseDb db
     let handle = prepareSql(db, sql)
     SqlStatementImpl(handle: handle, db: db).SqlStatement
     
 proc exec*(statement: SqlStatement, params: varargs[DbValue, toDbValue]) =
+    ## Executes `statement` with `params` as parameters.
     assertCanUseStatement statement
     var rc = statement.db.bindParams(statement.handle, params)
     if rc notin SqliteRcOk:
@@ -444,7 +497,7 @@ proc execMany*(statement: SqlStatement, params: seq[seq[DbValue]]) =
             statement.exec(p)
 
 iterator iterate*(statement: SqlStatement, params: varargs[DbValue, toDbValue]): ResultRow =
-    ## Executes ``statement`` and yields each row one by one.
+    ## Executes ``statement`` and yields each result row one by one.
     assertCanUseStatement statement
     var errorRc: int32
     try:
@@ -458,33 +511,37 @@ iterator iterate*(statement: SqlStatement, params: varargs[DbValue, toDbValue]):
         statement.db.checkRc errorRc
 
 proc all*(statement: SqlStatement, params: varargs[DbValue, toDbValue]): seq[ResultRow] =
+    ## Executes ``statement`` and returns all result rows.
     assertCanUseStatement statement
     for row in statement.iterate(params):
         result.add row
 
 proc one*(statement: SqlStatement,
         params: varargs[DbValue, toDbValue]): Option[ResultRow] =
-    assertCanUseStatement statement
     ## Executes `statement` and returns the first row found.
     ## Returns `none(seq[DbValue])` if no result was found.
-    for row in statement.all(params):
+    assertCanUseStatement statement
+    for row in statement.iterate(params):
         return some(row)
 
 proc value*(statement: SqlStatement,
         params: varargs[DbValue, toDbValue]): Option[DbValue] =
-    assertCanUseStatement statement
     ## Executes `statement` and returns the first column of the first row found. 
     ## Returns `none(DbValue)` if no result was found.
-    for row in statement.all(params):
+    assertCanUseStatement statement
+    for row in statement.iterate(params):
         return some(row.values[0])
 
 proc finalize*(statement: SqlStatement): void =
+    ## Finalize the statement. This needs to be called once the statement is no longer used to
+    ## prevent memory leaks. Finalizing an already finalized statement is a harmless no-op.
     if SqlStatementImpl(statement).isNil:
         return
     discard sqlite.finalize(statement.handle)
     SqlStatementImpl(statement).handle = nil
 
 proc isAlive*(statement: SqlStatement): bool =
+    ## Returns true if ``statement`` has been initialized and not yet finalized.
     (not SqlStatementImpl(statement).isNil) and (not statement.handle.isNil) and
         (not statement.db.handle.isNil)
 
@@ -517,25 +574,31 @@ proc openDatabase*(path: string, mode = dbReadWrite, cacheSize: Natural = 50): D
 #
 
 proc `[]`*(row: ResultRow, idx: int): DbValue =
+    ## Access a column in the result row based on index.
     row.values[idx]
 
 proc `[]`*(row: ResultRow, column: string): DbValue =
+    ## Access a column in te result row based on column name.
+    ## The column name must be unambiguous.
     let idx = row.columns.find(column)
     doAssert idx != -1, "Column does not exist in row: '" & column & "'"
     doAssert count(row.columns, column) == 1, "Column exists multiple times in row: '" & column & "'"
     row.values[idx]
 
 proc len*(row: ResultRow): int =
+    ## Returns the number of columns in the result row.
     row.values.len
 
 proc values*(row: ResultRow): seq[DbValue] =
+    ## Returns all column values in the result row.
     row.values
 
 proc columns*(row: ResultRow): seq[string] =
+    ## Returns all column names in the result row.
     row.columns
 
 proc unpack*[T: tuple](row: ResultRow, _: typedesc[T]): T =
-    ## Call ``fromDbValue`` on each element of ``row`` and return it
+    ## Calls ``fromDbValue`` on each element of ``row`` and returns it
     ## as a tuple.
     doAssert row.len == result.tupleLen,
         "Unpack expected a tuple with " & $row.len & " field(s) but found: " & $T
