@@ -1,4 +1,4 @@
-import std / [unittest, options, sequtils]
+import std / [unittest, options, sequtils, times]
 import .. / src / tiny_sqlite
 
 const SelectPersons = "SELECT name, age FROM Person"
@@ -70,6 +70,15 @@ test "db.exec":
         check rows.len == 3
         db.exec("DELETE FROM Person WHERE name = ?", "John Persson")
         check db.all(SelectPersons).len == 2
+
+test "db.execMany":
+    withDb:
+        db.execMany("""
+            INSERT INTO Person(name, age)
+            VALUES(?, ?)
+        """, @[toDbValues("John Doe", 23), toDbValues("Jane Doe", 22)])
+        let rows = db.all(SelectPersons)
+        check rows.len == 4
 
 test "db.execMany with failure":
     withDb:
@@ -321,3 +330,19 @@ test "Type mappings":
             # sqliteInteger can be treated as bool (or any other ordinal as well)
             let unpackedRow = rows[0].unpack((string, bool, float, Option[int], seq[byte]))
             check unpackedRow[1]
+
+proc toDbValue(t: Time): DbValue =
+    DbValue(kind: sqliteInteger, intVal: toUnix(t))
+
+proc fromDbValue(value: DbValue, T: typedesc[Time]): Time =
+    fromUnix(value.intval)
+
+test "Custom type mapping":
+    withDb:
+        db.exec("CREATE TABLE Foo(timestamp INTEGER)")
+        db.exec("INSERT INTO Foo(timestamp) VALUES(?)", fromUnix(12))
+        let row = db.one("SELECT timestamp FROM Foo")
+        check row.isSome
+        let (timestamp,) = row.get.unpack((Time,))
+        check timestamp == fromUnix(12)
+        
