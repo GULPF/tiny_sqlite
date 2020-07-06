@@ -134,6 +134,9 @@ on the connection object are also available for the prepared statement:
     
     let stmt = db.stmt("INSERT INTO Person(name, age) VALUES (?, ?)")
     stmt.exec("John Doe", 21)
+    # Once the statement is no longer needed it must be finalized
+    # to prevent memory leaks.
+    stmt.finalize()
 
 There are performance benefits of reusing prepared statements, since the preparation only needs to be done once.
 However, `tiny_sqlite` keeps an internal cache of prepared statements, so it's typically not necesarry to manage
