@@ -1,4 +1,4 @@
-include tiny_sqlite / private / documentation
+## .. include:: ./tiny_sqlite/private/documentation.rst
 
 import std / [options, macros, typetraits, tables, sequtils]
 from tiny_sqlite / sqlite_wrapper as sqlite import nil
@@ -17,7 +17,7 @@ type
         handle: sqlite.Stmt
         db: DbConn
 
-    SqlStatement* = distinct SqlStatementImpl
+    SqlStatement* = distinct SqlStatementImpl ## A prepared SQL statement.
 
     DbMode* = enum
         dbRead,
@@ -127,21 +127,23 @@ proc toDbValue*[T: Option](val: T): DbValue =
 proc toDbValue*[T: type(nil)](val: T): DbValue =
     DbValue(kind: sqliteNull)
 
-proc fromDbValue*(val: DbValue, T: typedesc[Ordinal]): T = val.intval.T
+proc toDbValues*(values: varargs[DbValue, toDbValue]): seq[DbValue] = @values
 
-proc fromDbValue*(val: DbValue, T: typedesc[SomeFloat]): float64 = val.floatVal
+proc fromDbValue*(value: DbValue, T: typedesc[Ordinal]): T = value.intval.T
 
-proc fromDbValue*(val: DbValue, T: typedesc[string]): string = val.strVal
+proc fromDbValue*(value: DbValue, T: typedesc[SomeFloat]): float64 = value.floatVal
 
-proc fromDbValue*(val: DbValue, T: typedesc[seq[byte]]): seq[byte] = val.blobVal
+proc fromDbValue*(value: DbValue, T: typedesc[string]): string = value.strVal
 
-proc fromDbValue*(val: DbValue, T: typedesc[DbValue]): T = val
+proc fromDbValue*(value: DbValue, T: typedesc[seq[byte]]): seq[byte] = value.blobVal
 
-proc fromDbValue*[T](val: DbValue, _: typedesc[Option[T]]): Option[T] =
-    if val.kind == sqliteNull:
+proc fromDbValue*(value: DbValue, T: typedesc[DbValue]): T = value
+
+proc fromDbValue*[T](value: DbValue, _: typedesc[Option[T]]): Option[T] =
+    if value.kind == sqliteNull:
         none(T)
     else:
-        some(val.fromDbValue(T))
+        some(value.fromDbValue(T))
 
 proc `$`*(dbVal: DbValue): string =
     result.add "DbValue["
@@ -236,7 +238,7 @@ proc readColumn(prepared: PreparedSql, col: int32): DbValue =
     else:
         raiseAssert "Unexpected column type: " & $columnType
 
-iterator iterate*(db: DbConn, stmtOrHandle: PreparedSql | SqlStatement, params: varargs[DbValue],
+iterator iterate(db: DbConn, stmtOrHandle: PreparedSql | SqlStatement, params: varargs[DbValue],
         errorRc: var int32): ResultRow =
     let prepared = when stmtOrHandle is PreparedSql: stmtOrHandle else: stmtOrHandle.handle
     errorRc = db.bindParams(prepared, params)
@@ -280,7 +282,7 @@ proc exec*(db: DbConn, sql: string, params: varargs[DbValue, toDbValue]) =
 
 template transaction*(db: DbConn, body: untyped) =
     ## Starts a transaction and runs `body` within it. At the end the transaction is commited.
-    ## If an error is raised by `body` the transaction is rolled back. Nested transactions is a no-op.
+    ## If an error is raised by `body` the transaction is rolled back. Nesting transactions is a no-op.
     if db.isInTransaction:
         body
     else:
@@ -325,7 +327,7 @@ proc execScript*(db: DbConn, sql: string) =
 
 iterator iterate*(db: DbConn, sql: string,
         params: varargs[DbValue, toDbValue]): ResultRow =
-    ## Executes ``sql`` and yields each resulting row.
+    ## Executes ``sql`` and yields each row one by one.
     assertCanUseDb db
     let prepared = db.prepareSql(sql, @params)
     var errorRc: int32
@@ -434,12 +436,15 @@ proc exec*(statement: SqlStatement, params: varargs[DbValue, toDbValue]) =
         statement.db.checkRc(rc)
 
 proc execMany*(statement: SqlStatement, params: seq[seq[DbValue]]) =
+    ## Executes ``statement`` repeatedly using each element of ``params`` as parameters.
+    ## The statements are executed inside a transaction.
     assertCanUseStatement statement
     statement.db.transaction:
         for p in params:
             statement.exec(p)
 
 iterator iterate*(statement: SqlStatement, params: varargs[DbValue, toDbValue]): ResultRow =
+    ## Executes ``statement`` and yields each row one by one.
     assertCanUseStatement statement
     var errorRc: int32
     try:
@@ -483,8 +488,8 @@ proc isAlive*(statement: SqlStatement): bool =
     (not SqlStatementImpl(statement).isNil) and (not statement.handle.isNil) and
         (not statement.db.handle.isNil)
 
-proc openDatabase*(path: string, mode = dbReadWrite, cacheSize = 50): DbConn =
-    ## Open a new database connection to a database file. To create a
+proc openDatabase*(path: string, mode = dbReadWrite, cacheSize: Natural = 50): DbConn =
+    ## Open a new database connection to a database file. To create an
     ## in-memory database the special path `":memory:"` can be used.
     ## If the database doesn't already exist and ``mode`` is ``dbReadWrite``,
     ## the database will be created. If the database doesn't exist and ``mode``

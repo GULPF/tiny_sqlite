@@ -97,13 +97,14 @@ function main() {
     </select>
   </div>
   <ul class="simple simple-toc" id="toc-list">
-<ul class="simple"><li><a class="reference" id="opening-a-database-connectiondot_toc" href="#opening-a-database-connectiondot">Opening a database connection.</a></li>
+<li><a class="reference" id="opening-a-database-connectiondot_toc" href="#opening-a-database-connectiondot">Opening a database connection.</a></li>
 <li><a class="reference" id="executing-sql_toc" href="#executing-sql">Executing SQL</a></li>
 <li><a class="reference" id="reading-data_toc" href="#reading-data">Reading data</a></li>
-<li><a class="reference" id="inserting-data_toc" href="#inserting-data">Inserting data</a></li>
+<li><a class="reference" id="inserting-data-in-bulk_toc" href="#inserting-data-in-bulk">Inserting data in bulk</a></li>
 <li><a class="reference" id="transactions_toc" href="#transactions">Transactions</a></li>
+<li><a class="reference" id="prepared-statements_toc" href="#prepared-statements">Prepared statements</a></li>
 <li><a class="reference" id="supported-types_toc" href="#supported-types">Supported types</a></li>
-</ul><li>
+<li>
   <a class="reference reference-toplevel" href="#6" id="56">Imports</a>
   <ul class="simple simple-toc-section">
     
@@ -114,6 +115,8 @@ function main() {
   <ul class="simple simple-toc-section">
       <li><a class="reference" href="#DbConn"
     title="DbConn = distinct DbConnImpl"><wbr />Db<wbr />Conn<span class="attachedType"></span></a></li>
+  <li><a class="reference" href="#SqlStatement"
+    title="SqlStatement = distinct SqlStatementImpl"><wbr />Sql<wbr />Statement<span class="attachedType"></span></a></li>
   <li><a class="reference" href="#DbMode"
     title="DbMode = enum
   dbRead, dbReadWrite"><wbr />Db<wbr />Mode<span class="attachedType"></span></a></li>
@@ -139,6 +142,10 @@ function main() {
 
   of sqliteNull:
       nil"><wbr />Db<wbr />Value<span class="attachedType"></span></a></li>
+  <li><a class="reference" href="#ResultRow"
+    title="ResultRow = object
+  values: seq[DbValue]
+  columns: seq[string]"><wbr />Result<wbr />Row<span class="attachedType"></span></a></li>
 
   </ul>
 </li>
@@ -157,32 +164,36 @@ function main() {
     title="toDbValue[T: Option](val: T): DbValue"><wbr />to<wbr />Db<wbr />Value<span class="attachedType">DbValue</span></a></li>
   <li><a class="reference" href="#toDbValue%2CT_6"
     title="toDbValue[T: type(nil)](val: T): DbValue"><wbr />to<wbr />Db<wbr />Value<span class="attachedType">DbValue</span></a></li>
+  <li><a class="reference" href="#toDbValues%2Cvarargs%5BDbValue%2CtoDbValue%5D"
+    title="toDbValues(values: varargs[DbValue, toDbValue]): seq[DbValue]"><wbr />to<wbr />Db<wbr />Values<span class="attachedType">DbValue</span></a></li>
   <li><a class="reference" href="#fromDbValue%2CDbValue%2Ctypedesc%5BOrdinal%5D"
-    title="fromDbValue(val: DbValue; T: typedesc[Ordinal]): T:type"><wbr />from<wbr />Db<wbr />Value<span class="attachedType">DbValue</span></a></li>
+    title="fromDbValue(value: DbValue; T: typedesc[Ordinal]): T:type"><wbr />from<wbr />Db<wbr />Value<span class="attachedType">DbValue</span></a></li>
   <li><a class="reference" href="#fromDbValue%2CDbValue%2Ctypedesc%5BSomeFloat%5D"
-    title="fromDbValue(val: DbValue; T: typedesc[SomeFloat]): float64"><wbr />from<wbr />Db<wbr />Value<span class="attachedType">DbValue</span></a></li>
+    title="fromDbValue(value: DbValue; T: typedesc[SomeFloat]): float64"><wbr />from<wbr />Db<wbr />Value<span class="attachedType">DbValue</span></a></li>
   <li><a class="reference" href="#fromDbValue%2CDbValue%2Ctypedesc%5Bstring%5D"
-    title="fromDbValue(val: DbValue; T: typedesc[string]): string"><wbr />from<wbr />Db<wbr />Value<span class="attachedType">DbValue</span></a></li>
+    title="fromDbValue(value: DbValue; T: typedesc[string]): string"><wbr />from<wbr />Db<wbr />Value<span class="attachedType">DbValue</span></a></li>
   <li><a class="reference" href="#fromDbValue%2CDbValue%2Ctypedesc%5Bseq%5Bbyte%5D%5D"
-    title="fromDbValue(val: DbValue; T: typedesc[seq[byte]]): seq[byte]"><wbr />from<wbr />Db<wbr />Value<span class="attachedType">DbValue</span></a></li>
+    title="fromDbValue(value: DbValue; T: typedesc[seq[byte]]): seq[byte]"><wbr />from<wbr />Db<wbr />Value<span class="attachedType">DbValue</span></a></li>
   <li><a class="reference" href="#fromDbValue%2CDbValue%2Ctypedesc%5BDbValue%5D"
-    title="fromDbValue(val: DbValue; T: typedesc[DbValue]): T:type"><wbr />from<wbr />Db<wbr />Value<span class="attachedType">DbValue</span></a></li>
+    title="fromDbValue(value: DbValue; T: typedesc[DbValue]): T:type"><wbr />from<wbr />Db<wbr />Value<span class="attachedType">DbValue</span></a></li>
   <li><a class="reference" href="#fromDbValue%2CDbValue%2Ctypedesc%5BOption%5BT%5D%5D"
-    title="fromDbValue[T](val: DbValue; _: typedesc[Option[T]]): Option[T]"><wbr />from<wbr />Db<wbr />Value<span class="attachedType">DbValue</span></a></li>
-  <li><a class="reference" href="#unpack%2CopenArray%5BDbValue%5D%2Ctypedesc%5BT%5D"
-    title="unpack[T: tuple](row: openArray[DbValue]; _: typedesc[T]): T"><wbr />unpack<span class="attachedType">DbValue</span></a></li>
+    title="fromDbValue[T](value: DbValue; _: typedesc[Option[T]]): Option[T]"><wbr />from<wbr />Db<wbr />Value<span class="attachedType">DbValue</span></a></li>
   <li><a class="reference" href="#%24%2CDbValue"
     title="`$`(dbVal: DbValue): string"><wbr />`$`<span class="attachedType">DbValue</span></a></li>
+  <li><a class="reference" href="#%3D%3D%2CDbValue%2CDbValue"
+    title="`==`(a, b: DbValue): bool"><wbr />`==`<span class="attachedType">DbValue</span></a></li>
   <li><a class="reference" href="#exec%2CDbConn%2Cstring%2Cvarargs%5BDbValue%2CtoDbValue%5D"
     title="exec(db: DbConn; sql: string; params: varargs[DbValue, toDbValue])"><wbr />exec<span class="attachedType">DbConn</span></a></li>
   <li><a class="reference" href="#execMany%2CDbConn%2Cstring%2Cseq%5Bseq%5BDbValue%5D%5D"
     title="execMany(db: DbConn; sql: string; params: seq[seq[DbValue]])"><wbr />exec<wbr />Many<span class="attachedType">DbConn</span></a></li>
   <li><a class="reference" href="#execScript%2CDbConn%2Cstring"
     title="execScript(db: DbConn; sql: string)"><wbr />exec<wbr />Script<span class="attachedType">DbConn</span></a></li>
-  <li><a class="reference" href="#rows%2CDbConn%2Cstring%2Cvarargs%5BDbValue%2CtoDbValue%5D"
-    title="rows(db: DbConn; sql: string; params: varargs[DbValue, toDbValue]): seq[seq[DbValue]]"><wbr />rows<span class="attachedType">DbConn</span></a></li>
-  <li><a class="reference" href="#openDatabase%2Cstring%2Cint"
-    title="openDatabase(path: string; mode = dbReadWrite; cacheSize = 50): DbConn"><wbr />open<wbr />Database<span class="attachedType">DbConn</span></a></li>
+  <li><a class="reference" href="#all%2CDbConn%2Cstring%2Cvarargs%5BDbValue%2CtoDbValue%5D"
+    title="all(db: DbConn; sql: string; params: varargs[DbValue, toDbValue]): seq[ResultRow]"><wbr />all<span class="attachedType">DbConn</span></a></li>
+  <li><a class="reference" href="#one%2CDbConn%2Cstring%2Cvarargs%5BDbValue%2CtoDbValue%5D"
+    title="one(db: DbConn; sql: string; params: varargs[DbValue, toDbValue]): Option[ResultRow]"><wbr />one<span class="attachedType">DbConn</span></a></li>
+  <li><a class="reference" href="#value%2CDbConn%2Cstring%2Cvarargs%5BDbValue%2CtoDbValue%5D"
+    title="value(db: DbConn; sql: string; params: varargs[DbValue, toDbValue]): Option[DbValue]"><wbr />value<span class="attachedType">DbConn</span></a></li>
   <li><a class="reference" href="#close%2CDbConn"
     title="close(db: DbConn)"><wbr />close<span class="attachedType">DbConn</span></a></li>
   <li><a class="reference" href="#lastInsertRowId%2CDbConn"
@@ -195,16 +206,54 @@ function main() {
     title="isOpen(db: DbConn): bool"><wbr />is<wbr />Open<span class="attachedType">DbConn</span></a></li>
   <li><a class="reference" href="#isInTransaction%2CDbConn"
     title="isInTransaction(db: DbConn): bool"><wbr />is<wbr />In<wbr />Transaction<span class="attachedType">DbConn</span></a></li>
-  <li><a class="reference" href="#handle%2CDbConn"
-    title="handle(db: DbConn): sqlite.PSqlite3"><wbr />handle<span class="attachedType">DbConn</span></a></li>
+  <li><a class="reference" href="#unsafeHandle%2CDbConn"
+    title="unsafeHandle(db: DbConn): sqlite.Sqlite3"><wbr />unsafe<wbr />Handle<span class="attachedType">DbConn</span></a></li>
+  <li><a class="reference" href="#stmt%2CDbConn%2Cstring"
+    title="stmt(db: DbConn; sql: string): SqlStatement"><wbr />stmt<span class="attachedType">DbConn</span></a></li>
+  <li><a class="reference" href="#exec%2CSqlStatement%2Cvarargs%5BDbValue%2CtoDbValue%5D"
+    title="exec(statement: SqlStatement; params: varargs[DbValue, toDbValue])"><wbr />exec<span class="attachedType">SqlStatement</span></a></li>
+  <li><a class="reference" href="#execMany%2CSqlStatement%2Cseq%5Bseq%5BDbValue%5D%5D"
+    title="execMany(statement: SqlStatement; params: seq[seq[DbValue]])"><wbr />exec<wbr />Many<span class="attachedType">SqlStatement</span></a></li>
+  <li><a class="reference" href="#all%2CSqlStatement%2Cvarargs%5BDbValue%2CtoDbValue%5D"
+    title="all(statement: SqlStatement; params: varargs[DbValue, toDbValue]): seq[ResultRow]"><wbr />all<span class="attachedType">SqlStatement</span></a></li>
+  <li><a class="reference" href="#one%2CSqlStatement%2Cvarargs%5BDbValue%2CtoDbValue%5D"
+    title="one(statement: SqlStatement; params: varargs[DbValue, toDbValue]): Option[ResultRow]"><wbr />one<span class="attachedType">SqlStatement</span></a></li>
+  <li><a class="reference" href="#value%2CSqlStatement%2Cvarargs%5BDbValue%2CtoDbValue%5D"
+    title="value(statement: SqlStatement; params: varargs[DbValue, toDbValue]): Option[DbValue]"><wbr />value<span class="attachedType">SqlStatement</span></a></li>
+  <li><a class="reference" href="#finalize%2CSqlStatement"
+    title="finalize(statement: SqlStatement): void"><wbr />finalize<span class="attachedType">SqlStatement</span></a></li>
+  <li><a class="reference" href="#isAlive%2CSqlStatement"
+    title="isAlive(statement: SqlStatement): bool"><wbr />is<wbr />Alive<span class="attachedType">SqlStatement</span></a></li>
+  <li><a class="reference" href="#openDatabase%2Cstring%2CNatural"
+    title="openDatabase(path: string; mode = dbReadWrite; cacheSize: Natural = 50): DbConn"><wbr />open<wbr />Database<span class="attachedType">DbConn</span></a></li>
+  <li><a class="reference" href="#%5B%5D%2CResultRow%2Cint"
+    title="`[]`(row: ResultRow; idx: int): DbValue"><wbr />`[]`<span class="attachedType">ResultRow</span></a></li>
+  <li><a class="reference" href="#%5B%5D%2CResultRow%2Cstring"
+    title="`[]`(row: ResultRow; column: string): DbValue"><wbr />`[]`<span class="attachedType">ResultRow</span></a></li>
+  <li><a class="reference" href="#len%2CResultRow"
+    title="len(row: ResultRow): int"><wbr />len<span class="attachedType">ResultRow</span></a></li>
+  <li><a class="reference" href="#values%2CResultRow"
+    title="values(row: ResultRow): seq[DbValue]"><wbr />values<span class="attachedType">ResultRow</span></a></li>
+  <li><a class="reference" href="#columns%2CResultRow"
+    title="columns(row: ResultRow): seq[string]"><wbr />columns<span class="attachedType">ResultRow</span></a></li>
+  <li><a class="reference" href="#unpack%2CResultRow%2Ctypedesc%5BT%5D"
+    title="unpack[T: tuple](row: ResultRow; _: typedesc[T]): T"><wbr />unpack<span class="attachedType">ResultRow</span></a></li>
+  <li><a class="reference" href="#rows%2CDbConn%2Cstring%2Cvarargs%5BDbValue%2CtoDbValue%5D"
+    title="rows(db: DbConn; sql: string; params: varargs[DbValue, toDbValue]): seq[ResultRow]"><wbr />rows<span class="attachedType">DbConn</span></a></li>
+  <li><a class="reference" href="#unpack%2Cseq%5BDbValue%5D%2Ctypedesc%5BT%5D"
+    title="unpack[T: tuple](row: seq[DbValue]; _: typedesc[T]): T"><wbr />unpack<span class="attachedType">DbValue</span></a></li>
 
   </ul>
 </li>
 <li>
   <a class="reference reference-toplevel" href="#15" id="65">Iterators</a>
   <ul class="simple simple-toc-section">
-      <li><a class="reference" href="#rows.i%2CDbConn%2Cstring%2Cvarargs%5BDbValue%2CtoDbValue%5D"
-    title="rows(db: DbConn; sql: string; params: varargs[DbValue, toDbValue]): seq[DbValue]"><wbr />rows<span class="attachedType">DbConn</span></a></li>
+      <li><a class="reference" href="#iterate.i%2CDbConn%2Cstring%2Cvarargs%5BDbValue%2CtoDbValue%5D"
+    title="iterate(db: DbConn; sql: string; params: varargs[DbValue, toDbValue]): ResultRow"><wbr />iterate<span class="attachedType">DbConn</span></a></li>
+  <li><a class="reference" href="#iterate.i%2CSqlStatement%2Cvarargs%5BDbValue%2CtoDbValue%5D"
+    title="iterate(statement: SqlStatement; params: varargs[DbValue, toDbValue]): ResultRow"><wbr />iterate<span class="attachedType">SqlStatement</span></a></li>
+  <li><a class="reference" href="#rows.i%2CDbConn%2Cstring%2Cvarargs%5BDbValue%2CtoDbValue%5D"
+    title="rows(db: DbConn; sql: string; params: varargs[DbValue, toDbValue]): ResultRow"><wbr />rows<span class="attachedType">DbConn</span></a></li>
 
   </ul>
 </li>
@@ -224,14 +273,12 @@ function main() {
   <div id="tocRoot"></div>
   
   <p class="module-desc">
-<h3><a class="toc-backref" id="opening-a-database-connectiondot" href="#opening-a-database-connectiondot">Opening a database connection.</a></h3><p>A database connection is opened with the <tt class="docutils literal"><span class="pre">openDatabase</span></tt> procedure. If the file doesn't exist, it will be created. An in-memory database can be created by using the special path <tt class="docutils literal"><span class="pre">&quot;:memory:&quot;</span></tt> as an argument. Once the database connection is no longer needed <tt class="docutils literal"><span class="pre">db.close()</span></tt> must be called to prevent memory leaks.</p>
-<p><pre class="listing"><span class="Keyword">let</span> <span class="Identifier">db</span> <span class="Operator">=</span> <span class="Identifier">openDatabase</span><span class="Punctuation">(</span><span class="StringLit">&quot;path/to/file.db&quot;</span><span class="Punctuation">)</span>
+<h1><a class="toc-backref" id="opening-a-database-connectiondot" href="#opening-a-database-connectiondot">Opening a database connection.</a></h1><p>A database connection is opened by calling the <a class="reference external" href="#openDatabase,string,Natural">openDatabase</a> procedure with the path to the database file as an argument. If the file doesn't exist, it will be created. An in-memory database can be created by using the special path <tt class="docutils literal"><span class="pre">&quot;:memory:&quot;</span></tt> as an argument. Once the database connection is no longer needed <a class="reference external" href="#close,DbConn">close</a> must be called to prevent memory leaks.</p>
+<pre class="listing"><span class="Keyword">let</span> <span class="Identifier">db</span> <span class="Operator">=</span> <span class="Identifier">openDatabase</span><span class="Punctuation">(</span><span class="StringLit">&quot;path/to/file.db&quot;</span><span class="Punctuation">)</span>
 <span class="Comment"># ... (do something with `db`)</span>
-<span class="Identifier">db</span><span class="Operator">.</span><span class="Identifier">close</span><span class="Punctuation">(</span><span class="Punctuation">)</span>
-</pre></p>
-
-<h3><a class="toc-backref" id="executing-sql" href="#executing-sql">Executing SQL</a></h3><p>The <tt class="docutils literal"><span class="pre">exec</span></tt> procedure can be used to execute a single SQL statement. The <tt class="docutils literal"><span class="pre">execScript</span></tt> procedure is used to execute several statements, but it doesn't support parameter substitution.</p>
-<p><pre class="listing"><span class="Identifier">db</span><span class="Operator">.</span><span class="Identifier">execScript</span><span class="Punctuation">(</span><span class="LongStringLit">&quot;&quot;&quot;
+<span class="Identifier">db</span><span class="Operator">.</span><span class="Identifier">close</span><span class="Punctuation">(</span><span class="Punctuation">)</span></pre>
+<h1><a class="toc-backref" id="executing-sql" href="#executing-sql">Executing SQL</a></h1><p>The <a class="reference external" href="#exec,DbConn,string,varargs[DbValue,toDbValue]">exec</a> procedure can be used to execute a single SQL statement. The <a class="reference external" href="#execScript,DbConn,string">execScript</a> procedure is used to execute several statements, but it doesn't support parameter substitution.</p>
+<pre class="listing"><span class="Identifier">db</span><span class="Operator">.</span><span class="Identifier">execScript</span><span class="Punctuation">(</span><span class="LongStringLit">&quot;&quot;&quot;
     CREATE TABLE Person(
         name TEXT,
         age INTEGER
@@ -245,49 +292,63 @@ function main() {
 <span class="Identifier">db</span><span class="Operator">.</span><span class="Identifier">exec</span><span class="Punctuation">(</span><span class="LongStringLit">&quot;&quot;&quot;
     INSERT INTO Person(name, age)
     VALUES(?, ?);
-&quot;&quot;&quot;</span><span class="Punctuation">,</span> <span class="StringLit">&quot;John Doe&quot;</span><span class="Punctuation">,</span> <span class="DecNumber">37</span><span class="Punctuation">)</span>
-</pre></p>
-
-<h3><a class="toc-backref" id="reading-data" href="#reading-data">Reading data</a></h3><p>To read data from the database, the <tt class="docutils literal"><span class="pre">row</span></tt> iterator and proc is used.</p>
-<p><pre class="listing"><span class="Keyword">for</span> <span class="Identifier">row</span> <span class="Keyword">in</span> <span class="Identifier">db</span><span class="Operator">.</span><span class="Identifier">rows</span><span class="Punctuation">(</span><span class="StringLit">&quot;SELECT name, age FROM Person&quot;</span><span class="Punctuation">)</span><span class="Punctuation">:</span>
-    <span class="Comment"># The `row` variable is of type `seq[DbValue]`.</span>
-    <span class="Comment"># Each column value can be converted to a normal</span>
-    <span class="Comment"># Nim type with the `fromDbValue` proc</span>
+&quot;&quot;&quot;</span><span class="Punctuation">,</span> <span class="StringLit">&quot;John Doe&quot;</span><span class="Punctuation">,</span> <span class="DecNumber">37</span><span class="Punctuation">)</span></pre>
+<h1><a class="toc-backref" id="reading-data" href="#reading-data">Reading data</a></h1><p>Four different procedures for reading data are available:</p>
+<ul class="simple"><li><a class="reference external" href="#all,DbConn,string,varargs[DbValue,toDbValue]">all</a>: procedure returning all result rows</li>
+<li><a class="reference external" href="#iterate.i,DbConn,string,varargs[DbValue,toDbValue]">iterate</a>: iterator yielding each result row one by one</li>
+<li><a class="reference external" href="#one,DbConn,string,varargs[DbValue,toDbValue]">one</a>: procedure returning the first result row, or <tt class="docutils literal"><span class="pre">none</span></tt> if no result row exists</li>
+<li><a class="reference external" href="#value,DbConn,string,varargs[DbValue,toDbValue]">value</a>: procedure returning the first column of the first result row, or <tt class="docutils literal"><span class="pre">none</span></tt> if no result row exists</li>
+</ul>
+<pre class="listing"><span class="Keyword">for</span> <span class="Identifier">row</span> <span class="Keyword">in</span> <span class="Identifier">db</span><span class="Operator">.</span><span class="Identifier">iterate</span><span class="Punctuation">(</span><span class="StringLit">&quot;SELECT name, age FROM Person&quot;</span><span class="Punctuation">)</span><span class="Punctuation">:</span>
+    <span class="Comment"># The 'row' variable is of type ResultRow.</span>
+    <span class="Comment"># The column values can be accesed by both index and column name:</span>
+    <span class="Identifier">echo</span> <span class="Identifier">row</span><span class="Punctuation">[</span><span class="DecNumber">0</span><span class="Punctuation">]</span><span class="Operator">.</span><span class="Identifier">strVal</span>      <span class="Comment"># Prints the name</span>
+    <span class="Identifier">echo</span> <span class="Identifier">row</span><span class="Punctuation">[</span><span class="StringLit">&quot;name&quot;</span><span class="Punctuation">]</span><span class="Operator">.</span><span class="Identifier">strVal</span> <span class="Comment"># Prints the name</span>
+    <span class="Identifier">echo</span> <span class="Identifier">row</span><span class="Punctuation">[</span><span class="DecNumber">1</span><span class="Punctuation">]</span><span class="Operator">.</span><span class="Identifier">intVal</span>      <span class="Comment"># Prints the age</span>
+    <span class="Comment"># Above we're using the raw DbValue's directly. Instead, we can unpack the</span>
+    <span class="Comment"># DbValue using the fromDbValue procedure:</span>
     <span class="Identifier">echo</span> <span class="Identifier">fromDbValue</span><span class="Punctuation">(</span><span class="Identifier">row</span><span class="Punctuation">[</span><span class="DecNumber">0</span><span class="Punctuation">]</span><span class="Punctuation">,</span> <span class="Identifier">string</span><span class="Punctuation">)</span> <span class="Comment"># Prints the name</span>
     <span class="Identifier">echo</span> <span class="Identifier">fromDbValue</span><span class="Punctuation">(</span><span class="Identifier">row</span><span class="Punctuation">[</span><span class="DecNumber">1</span><span class="Punctuation">]</span><span class="Punctuation">,</span> <span class="Identifier">int</span><span class="Punctuation">)</span>    <span class="Comment"># Prints the age</span>
-    <span class="Comment"># Alternatively, the entire row can be unpacked at once</span>
+    <span class="Comment"># Alternatively, the entire row can be unpacked at once:</span>
     <span class="Keyword">let</span> <span class="Punctuation">(</span><span class="Identifier">name</span><span class="Punctuation">,</span> <span class="Identifier">age</span><span class="Punctuation">)</span> <span class="Operator">=</span> <span class="Identifier">row</span><span class="Operator">.</span><span class="Identifier">unpack</span><span class="Punctuation">(</span><span class="Punctuation">(</span><span class="Identifier">string</span><span class="Punctuation">,</span> <span class="Identifier">int</span><span class="Punctuation">)</span><span class="Punctuation">)</span>
-    <span class="Comment"># To handle NULL values, `Option[T]` is used</span>
+    <span class="Comment"># Unpacking the value is preferable as it makes it possible to handle</span>
+    <span class="Comment"># bools, enums, distinct types, nullable types and more. For example, nullable</span>
+    <span class="Comment"># types are handled using Option[T]:</span>
     <span class="Identifier">echo</span> <span class="Identifier">fromDbValue</span><span class="Punctuation">(</span><span class="Identifier">row</span><span class="Punctuation">[</span><span class="DecNumber">0</span><span class="Punctuation">]</span><span class="Punctuation">,</span> <span class="Identifier">Option</span><span class="Punctuation">[</span><span class="Identifier">string</span><span class="Punctuation">]</span><span class="Punctuation">)</span> <span class="Comment"># Will work even if the db value is NULL</span>
-</pre></p>
 
-<h3><a class="toc-backref" id="inserting-data" href="#inserting-data">Inserting data</a></h3><p>The <tt class="docutils literal"><span class="pre">execMany</span></tt> proc can be used to execute an SQL statement several times with different parameters. This is especially useful for insertions:</p>
-<p><pre class="listing"><span class="Keyword">let</span> <span class="Identifier">parameters</span> <span class="Operator">=</span> <span class="Operator">@</span><span class="Punctuation">[</span><span class="Operator">@</span><span class="Punctuation">[</span><span class="Identifier">toDbValue</span><span class="Punctuation">(</span><span class="StringLit">&quot;Person 1&quot;</span><span class="Punctuation">)</span><span class="Punctuation">]</span><span class="Punctuation">,</span> <span class="Operator">@</span><span class="Punctuation">[</span><span class="Identifier">toDbValue</span><span class="Punctuation">(</span><span class="StringLit">&quot;Person 2&quot;</span><span class="Punctuation">)</span><span class="Punctuation">]</span><span class="Punctuation">]</span>
+<span class="Comment"># Example of reading a single value. In this case, 'value' will be of type `Option[DbValue]`.</span>
+<span class="Keyword">let</span> <span class="Identifier">value</span> <span class="Operator">=</span> <span class="Identifier">db</span><span class="Operator">.</span><span class="Identifier">one</span><span class="Punctuation">(</span><span class="StringLit">&quot;SELECT age FROM Person WHERE name = ?&quot;</span><span class="Punctuation">,</span> <span class="StringLit">&quot;John Doe&quot;</span><span class="Punctuation">)</span>
+<span class="Keyword">if</span> <span class="Identifier">value</span><span class="Operator">.</span><span class="Identifier">isSome</span><span class="Punctuation">:</span>
+    <span class="Identifier">echo</span> <span class="Identifier">fromDbValue</span><span class="Punctuation">(</span><span class="Identifier">value</span><span class="Operator">.</span><span class="Identifier">get</span><span class="Punctuation">,</span> <span class="Identifier">int</span><span class="Punctuation">)</span> <span class="Comment"># Prints age of John Doe</span></pre><p>Note that the procedures <tt class="docutils literal"><span class="pre">one</span></tt> and <tt class="docutils literal"><span class="pre">value</span></tt> returns the result wrapped in an <tt class="docutils literal"><span class="pre">Option</span></tt>. See the standard library <a class="reference external" href="https://nim-lang.org/docs/options.html">options module</a> for documentation on how to deal with <tt class="docutils literal"><span class="pre">Option</span></tt> values.</p>
+
+<h1><a class="toc-backref" id="inserting-data-in-bulk" href="#inserting-data-in-bulk">Inserting data in bulk</a></h1><p>The <a class="reference external" href="#exec,DbConn,string,varargs[DbValue,toDbValue]">exec</a> procedure works fine for inserting single rows, but it gets awkward when inserting many rows. For this purpose the <a class="reference external" href="#execMany,DbConn,string,varargs[DbValue,toDbValue]">execMany</a> procedure can be used instead. It executes the same SQL repeatedly, but with different parameters each time.</p>
+<pre class="listing"><span class="Keyword">let</span> <span class="Identifier">parameters</span> <span class="Operator">=</span> <span class="Operator">@</span><span class="Punctuation">[</span><span class="Identifier">toDbValues</span><span class="Punctuation">(</span><span class="StringLit">&quot;Person 1&quot;</span><span class="Punctuation">,</span> <span class="DecNumber">17</span><span class="Punctuation">)</span><span class="Punctuation">,</span> <span class="Identifier">toDbValues</span><span class="Punctuation">(</span><span class="StringLit">&quot;Person 2&quot;</span><span class="Punctuation">,</span> <span class="DecNumber">55</span><span class="Punctuation">)</span><span class="Punctuation">]</span>
 <span class="Comment"># Will insert two rows</span>
 <span class="Identifier">db</span><span class="Operator">.</span><span class="Identifier">execMany</span><span class="Punctuation">(</span><span class="LongStringLit">&quot;&quot;&quot;
-    INSERT INTO Person(name)
-    VALUES(?);
-&quot;&quot;&quot;</span><span class="Punctuation">,</span> <span class="Identifier">parameters</span><span class="Punctuation">)</span>
-</pre></p>
-
-<h3><a class="toc-backref" id="transactions" href="#transactions">Transactions</a></h3><p>The procedures that can execute multiple SQL statements (<tt class="docutils literal"><span class="pre">execScript</span></tt> and <tt class="docutils literal"><span class="pre">execMany</span></tt>) are wrapped in a transaction by <tt class="docutils literal"><span class="pre">tiny_sqlite</span></tt>. Transactions can also be controlled manually by using one of these two options:</p>
-<p><strong>Option 1: using tiny_sqlite.transaction</strong> <pre class="listing"><span class="Identifier">db</span><span class="Operator">.</span><span class="Identifier">transaction</span><span class="Punctuation">:</span>
+    INSERT INTO Person(name, age)
+    VALUES(?, ?);
+&quot;&quot;&quot;</span><span class="Punctuation">,</span> <span class="Identifier">parameters</span><span class="Punctuation">)</span></pre>
+<h1><a class="toc-backref" id="transactions" href="#transactions">Transactions</a></h1><p>The procedures that can execute multiple SQL statements (<tt class="docutils literal"><span class="pre">execScript</span></tt> and <tt class="docutils literal"><span class="pre">execMany</span></tt>) are wrapped in a transaction by <tt class="docutils literal"><span class="pre">tiny_sqlite</span></tt>. Transactions can also be controlled manually by using one of these two options:</p>
+<ul class="simple"><li>Option 1: using the <a class="reference external" href="#transaction.t,DbConn,untyped">transaction</a> template</li>
+</ul>
+<pre class="listing"><span class="Identifier">db</span><span class="Operator">.</span><span class="Identifier">transaction</span><span class="Punctuation">:</span>
     <span class="Comment"># Anything inside here is executed inside a transaction which</span>
     <span class="Comment"># will be rolled back in case of an error</span>
-    <span class="Identifier">db</span><span class="Operator">.</span><span class="Identifier">execScript</span><span class="Punctuation">(</span><span class="LongStringLit">&quot;&quot;&quot;
-        DELETE FROM Person;
-        INSERT INTO Person(name, age) VALUES(&quot;Jane Doe&quot;, 35);
-    &quot;&quot;&quot;</span><span class="Punctuation">)</span>
-</pre> <strong>Option 2: using tiny_sqlite.exec manually</strong> <pre class="listing"><span class="Identifier">db</span><span class="Operator">.</span><span class="Identifier">exec</span><span class="Punctuation">(</span><span class="StringLit">&quot;BEGIN&quot;</span><span class="Punctuation">)</span>
+    <span class="Identifier">db</span><span class="Operator">.</span><span class="Identifier">exec</span><span class="Punctuation">(</span><span class="StringLit">&quot;DELETE FROM Person&quot;</span><span class="Punctuation">)</span>
+    <span class="Identifier">db</span><span class="Operator">.</span><span class="Identifier">exec</span><span class="Punctuation">(</span><span class="LongStringLit">&quot;&quot;&quot;INSERT INTO Person(name, age) VALUES(&quot;Jane Doe&quot;, 35)&quot;&quot;&quot;</span><span class="Punctuation">)</span></pre><ul class="simple"><li>Option 2: using the <tt class="docutils literal"><span class="pre">exec</span></tt> procedure manually</li>
+</ul>
+<pre class="listing"><span class="Identifier">db</span><span class="Operator">.</span><span class="Identifier">exec</span><span class="Punctuation">(</span><span class="StringLit">&quot;BEGIN&quot;</span><span class="Punctuation">)</span>
 <span class="Keyword">try</span><span class="Punctuation">:</span>
     <span class="Identifier">db</span><span class="Operator">.</span><span class="Identifier">exec</span><span class="Punctuation">(</span><span class="StringLit">&quot;DELETE FROM Person&quot;</span><span class="Punctuation">)</span>
-    <span class="Identifier">db</span><span class="Operator">.</span><span class="RawData">exec&quot;INSERT INTO Person(name, age) VALUES(&quot;</span><span class="Identifier">Jane</span> <span class="RawData">Doe&quot;, 35)&quot;</span><span class="Punctuation">)</span>
-<span class="Keyword">except</span> <span class="Identifier">SqliteError</span><span class="Punctuation">:</span>
-    <span class="Identifier">db</span><span class="Operator">.</span><span class="Identifier">exec</span><span class="Punctuation">(</span><span class="StringLit">&quot;ROLLBACK&quot;</span><span class="Punctuation">)</span>
-<span class="Identifier">db</span><span class="Operator">.</span><span class="Identifier">exec</span><span class="Punctuation">(</span><span class="StringLit">&quot;COMMIT&quot;</span><span class="Punctuation">)</span>
-</pre></p>
-
-<h3><a class="toc-backref" id="supported-types" href="#supported-types">Supported types</a></h3><p>For a type to be supported when using unpacking and parameter substitution the procedures <tt class="docutils literal"><span class="pre">toDbValue</span></tt> and <tt class="docutils literal"><span class="pre">fromDbValue</span></tt> must be implemented for the type. Below is table describing which types are supported by default and to which SQLite type they are mapped to:</p>
+    <span class="Identifier">db</span><span class="Operator">.</span><span class="Identifier">exec</span><span class="Punctuation">(</span><span class="LongStringLit">&quot;&quot;&quot;INSERT INTO Person(name, age) VALUES(&quot;Jane Doe&quot;, 35)&quot;&quot;&quot;</span><span class="Punctuation">)</span>
+    <span class="Identifier">db</span><span class="Operator">.</span><span class="Identifier">exec</span><span class="Punctuation">(</span><span class="StringLit">&quot;COMMIT&quot;</span><span class="Punctuation">)</span>
+<span class="Keyword">except</span><span class="Punctuation">:</span>
+    <span class="Identifier">db</span><span class="Operator">.</span><span class="Identifier">exec</span><span class="Punctuation">(</span><span class="StringLit">&quot;ROLLBACK&quot;</span><span class="Punctuation">)</span></pre>
+<h1><a class="toc-backref" id="prepared-statements" href="#prepared-statements">Prepared statements</a></h1><p>All the procedures described above operate directly on the database connection. In addition to those procedures, <tt class="docutils literal"><span class="pre">tiny_sqlite</span></tt> also offer an API for preparing SQL statements in advance. Prepared statements are created with the <a class="reference external" href="#stmt,DbConn,string">stmt</a> procedure, and the same procedures for executing SQL that are available directly on the connection object are also available for the prepared statement:</p>
+<pre class="listing"><span class="Keyword">let</span> <span class="Identifier">stmt</span> <span class="Operator">=</span> <span class="Identifier">db</span><span class="Operator">.</span><span class="Identifier">stmt</span><span class="Punctuation">(</span><span class="StringLit">&quot;INSERT INTO Person(name, age) VALUES (?, ?)&quot;</span><span class="Punctuation">)</span>
+<span class="Identifier">stmt</span><span class="Operator">.</span><span class="Identifier">exec</span><span class="Punctuation">(</span><span class="StringLit">&quot;John Doe&quot;</span><span class="Punctuation">,</span> <span class="DecNumber">21</span><span class="Punctuation">)</span></pre><p>There are performance benefits of reusing prepared statements, since the preparation only needs to be done once. However, <tt class="docutils literal"><span class="pre">tiny_sqlite</span></tt> keeps an internal cache of prepared statements, so it's typically not necesarry to manage prepared statements manually. If you prefer if <tt class="docutils literal"><span class="pre">tiny_sqlite</span></tt> doesn't perform this caching, you can disable it by setting the <tt class="docutils literal"><span class="pre">cacheSize</span></tt> parameter when opening the database:</p>
+<pre class="listing"><span class="Keyword">let</span> <span class="Identifier">db</span> <span class="Operator">=</span> <span class="Identifier">openDatabase</span><span class="Punctuation">(</span><span class="StringLit">&quot;:memory:&quot;</span><span class="Punctuation">,</span> <span class="Identifier">cacheSize</span> <span class="Operator">=</span> <span class="DecNumber">0</span><span class="Punctuation">)</span></pre>
+<h1><a class="toc-backref" id="supported-types" href="#supported-types">Supported types</a></h1><p>For a type to be supported when using unpacking and parameter substitution the procedures <tt class="docutils literal"><span class="pre">toDbValue</span></tt> and <tt class="docutils literal"><span class="pre">fromDbValue</span></tt> must be implemented for the type. Below is table describing which types are supported by default and to which SQLite type they are mapped to:</p>
 <table border="1" class="docutils"><tr><th>Nim type</th><th>SQLite type</th></tr>
 <tr><td><tt class="docutils literal"><span class="pre">Ordinal</span></tt></td><td><p><tt class="docutils literal"><span class="pre">INTEGER</span></tt><br /></p></td></tr>
 <tr><td><tt class="docutils literal"><span class="pre">SomeFloat</span></tt></td><td><p><tt class="docutils literal"><span class="pre">TEXT</span></tt><br /></p></td></tr>
@@ -295,15 +356,13 @@ function main() {
 <tr><td><tt class="docutils literal"><span class="pre">seq[byte]</span></tt></td><td><p><tt class="docutils literal"><span class="pre">BLOB</span></tt><br /></p></td></tr>
 <tr><td><tt class="docutils literal"><span class="pre">Option[T]</span></tt></td><td><p><tt class="docutils literal"><span class="pre">NULL</span></tt> if value is <tt class="docutils literal"><span class="pre">none(T)</span></tt>, otherwise the type that <tt class="docutils literal"><span class="pre">T</span></tt> would use<br /></p></td></tr>
 </table><p>This can be extended by implementing <tt class="docutils literal"><span class="pre">toDdValue</span></tt>  and <tt class="docutils literal"><span class="pre">fromDbValue</span></tt> for other types on your own. Below is an example how support for <tt class="docutils literal"><span class="pre">times.Time</span></tt> can be added:</p>
-<p><pre class="listing"><span class="Keyword">import</span> <span class="Identifier">tiny_sqlite</span><span class="Punctuation">,</span> <span class="Identifier">times</span>
+<pre class="listing"><span class="Keyword">import</span> <span class="Identifier">times</span>
 
 <span class="Keyword">proc</span> <span class="Identifier">toDbValue</span><span class="Punctuation">(</span><span class="Identifier">t</span><span class="Punctuation">:</span> <span class="Identifier">Time</span><span class="Punctuation">)</span><span class="Punctuation">:</span> <span class="Identifier">DbValue</span> <span class="Operator">=</span>
-    <span class="Identifier">DbValue</span><span class="Punctuation">(</span><span class="Identifier">kind</span><span class="Punctuation">:</span> <span class="Identifier">sqliteInt</span><span class="Punctuation">,</span> <span class="Identifier">toUnix</span><span class="Punctuation">(</span><span class="Identifier">t</span><span class="Punctuation">)</span><span class="Punctuation">)</span>
+    <span class="Identifier">DbValue</span><span class="Punctuation">(</span><span class="Identifier">kind</span><span class="Punctuation">:</span> <span class="Identifier">sqliteInteger</span><span class="Punctuation">,</span> <span class="Identifier">intVal</span><span class="Punctuation">:</span> <span class="Identifier">toUnix</span><span class="Punctuation">(</span><span class="Identifier">t</span><span class="Punctuation">)</span><span class="Punctuation">)</span>
 
-<span class="Keyword">proc</span> <span class="Identifier">fromDbValue</span><span class="Punctuation">(</span><span class="Identifier">val</span><span class="Punctuation">:</span> <span class="Identifier">DbValue</span><span class="Punctuation">,</span> <span class="Identifier">T</span><span class="Punctuation">:</span> <span class="Identifier">typedesc</span><span class="Punctuation">[</span><span class="Identifier">Time</span><span class="Punctuation">]</span><span class="Punctuation">)</span><span class="Punctuation">:</span> <span class="Identifier">Time</span> <span class="Operator">=</span>
-    <span class="Identifier">fromUnix</span><span class="Punctuation">(</span><span class="Identifier">val</span><span class="Operator">.</span><span class="Identifier">intval</span><span class="Punctuation">)</span>
-</pre> </p>
-</p>
+<span class="Keyword">proc</span> <span class="Identifier">fromDbValue</span><span class="Punctuation">(</span><span class="Identifier">value</span><span class="Punctuation">:</span> <span class="Identifier">DbValue</span><span class="Punctuation">,</span> <span class="Identifier">T</span><span class="Punctuation">:</span> <span class="Identifier">typedesc</span><span class="Punctuation">[</span><span class="Identifier">Time</span><span class="Punctuation">]</span><span class="Punctuation">)</span><span class="Punctuation">:</span> <span class="Identifier">Time</span> <span class="Operator">=</span>
+    <span class="Identifier">fromUnix</span><span class="Punctuation">(</span><span class="Identifier">value</span><span class="Operator">.</span><span class="Identifier">intval</span><span class="Punctuation">)</span></pre></p>
   <div class="section" id="6">
 <h1><a class="toc-backref" href="#6">Imports</a></h1>
 <dl class="item">
@@ -317,6 +376,13 @@ function main() {
 <dd>
 
 Encapsulates a database connection.
+
+</dd>
+<a id="SqlStatement"></a>
+<dt><pre><a href="tiny_sqlite.html#SqlStatement"><span class="Identifier">SqlStatement</span></a> <span class="Other">=</span> <span class="Keyword">distinct</span> <span class="Identifier">SqlStatementImpl</span></pre></dt>
+<dd>
+
+A prepared SQL statement.
 
 </dd>
 <a id="DbMode"></a>
@@ -369,6 +435,16 @@ Enum of all possible value types in a SQLite database.
 Can represent any value in a SQLite database.
 
 </dd>
+<a id="ResultRow"></a>
+<dt><pre><a href="tiny_sqlite.html#ResultRow"><span class="Identifier">ResultRow</span></a> <span class="Other">=</span> <span class="Keyword">object</span>
+  <span class="Identifier">values</span><span class="Other">:</span> <span class="Identifier">seq</span><span class="Other">[</span><a href="tiny_sqlite.html#DbValue"><span class="Identifier">DbValue</span></a><span class="Other">]</span>
+  <span class="Identifier">columns</span><span class="Other">:</span> <span class="Identifier">seq</span><span class="Other">[</span><span class="Identifier">string</span><span class="Other">]</span>
+</pre></dt>
+<dd>
+
+
+
+</dd>
 
 </dl></div>
 <div class="section" id="12">
@@ -416,53 +492,54 @@ Can represent any value in a SQLite database.
 
 
 </dd>
+<a id="toDbValues,varargs[DbValue,toDbValue]"></a>
+<dt><pre><span class="Keyword">proc</span> <a href="#toDbValues%2Cvarargs%5BDbValue%2CtoDbValue%5D"><span class="Identifier">toDbValues</span></a><span class="Other">(</span><span class="Identifier">values</span><span class="Other">:</span> <span class="Identifier">varargs</span><span class="Other">[</span><a href="tiny_sqlite.html#DbValue"><span class="Identifier">DbValue</span></a><span class="Other">,</span> <span class="Identifier">toDbValue</span><span class="Other">]</span><span class="Other">)</span><span class="Other">:</span> <span class="Identifier">seq</span><span class="Other">[</span><a href="tiny_sqlite.html#DbValue"><span class="Identifier">DbValue</span></a><span class="Other">]</span> <span><span class="Other">{</span><span class="Other pragmadots">...</span><span class="Other">}</span></span><span class="pragmawrap"><span class="Other">{.</span><span class="pragma"><span class="Identifier">raises</span><span class="Other">:</span> <span class="Other">[</span><span class="Other">]</span><span class="Other">,</span>
+    <span class="Identifier">tags</span><span class="Other">:</span> <span class="Other">[</span><span class="Other">]</span></span><span class="Other">.}</span></span></pre></dt>
+<dd>
+
+
+
+</dd>
 <a id="fromDbValue,DbValue,typedesc[Ordinal]"></a>
-<dt><pre><span class="Keyword">proc</span> <a href="#fromDbValue%2CDbValue%2Ctypedesc%5BOrdinal%5D"><span class="Identifier">fromDbValue</span></a><span class="Other">(</span><span class="Identifier">val</span><span class="Other">:</span> <a href="tiny_sqlite.html#DbValue"><span class="Identifier">DbValue</span></a><span class="Other">;</span> <span class="Identifier">T</span><span class="Other">:</span> <span class="Identifier">typedesc</span><span class="Other">[</span><span class="Identifier">Ordinal</span><span class="Other">]</span><span class="Other">)</span><span class="Other">:</span> <span class="Identifier">T:type</span></pre></dt>
+<dt><pre><span class="Keyword">proc</span> <a href="#fromDbValue%2CDbValue%2Ctypedesc%5BOrdinal%5D"><span class="Identifier">fromDbValue</span></a><span class="Other">(</span><span class="Identifier">value</span><span class="Other">:</span> <a href="tiny_sqlite.html#DbValue"><span class="Identifier">DbValue</span></a><span class="Other">;</span> <span class="Identifier">T</span><span class="Other">:</span> <span class="Identifier">typedesc</span><span class="Other">[</span><span class="Identifier">Ordinal</span><span class="Other">]</span><span class="Other">)</span><span class="Other">:</span> <span class="Identifier">T:type</span></pre></dt>
 <dd>
 
 
 
 </dd>
 <a id="fromDbValue,DbValue,typedesc[SomeFloat]"></a>
-<dt><pre><span class="Keyword">proc</span> <a href="#fromDbValue%2CDbValue%2Ctypedesc%5BSomeFloat%5D"><span class="Identifier">fromDbValue</span></a><span class="Other">(</span><span class="Identifier">val</span><span class="Other">:</span> <a href="tiny_sqlite.html#DbValue"><span class="Identifier">DbValue</span></a><span class="Other">;</span> <span class="Identifier">T</span><span class="Other">:</span> <span class="Identifier">typedesc</span><span class="Other">[</span><span class="Identifier">SomeFloat</span><span class="Other">]</span><span class="Other">)</span><span class="Other">:</span> <span class="Identifier">float64</span></pre></dt>
+<dt><pre><span class="Keyword">proc</span> <a href="#fromDbValue%2CDbValue%2Ctypedesc%5BSomeFloat%5D"><span class="Identifier">fromDbValue</span></a><span class="Other">(</span><span class="Identifier">value</span><span class="Other">:</span> <a href="tiny_sqlite.html#DbValue"><span class="Identifier">DbValue</span></a><span class="Other">;</span> <span class="Identifier">T</span><span class="Other">:</span> <span class="Identifier">typedesc</span><span class="Other">[</span><span class="Identifier">SomeFloat</span><span class="Other">]</span><span class="Other">)</span><span class="Other">:</span> <span class="Identifier">float64</span></pre></dt>
 <dd>
 
 
 
 </dd>
 <a id="fromDbValue,DbValue,typedesc[string]"></a>
-<dt><pre><span class="Keyword">proc</span> <a href="#fromDbValue%2CDbValue%2Ctypedesc%5Bstring%5D"><span class="Identifier">fromDbValue</span></a><span class="Other">(</span><span class="Identifier">val</span><span class="Other">:</span> <a href="tiny_sqlite.html#DbValue"><span class="Identifier">DbValue</span></a><span class="Other">;</span> <span class="Identifier">T</span><span class="Other">:</span> <span class="Identifier">typedesc</span><span class="Other">[</span><span class="Identifier">string</span><span class="Other">]</span><span class="Other">)</span><span class="Other">:</span> <span class="Identifier">string</span></pre></dt>
+<dt><pre><span class="Keyword">proc</span> <a href="#fromDbValue%2CDbValue%2Ctypedesc%5Bstring%5D"><span class="Identifier">fromDbValue</span></a><span class="Other">(</span><span class="Identifier">value</span><span class="Other">:</span> <a href="tiny_sqlite.html#DbValue"><span class="Identifier">DbValue</span></a><span class="Other">;</span> <span class="Identifier">T</span><span class="Other">:</span> <span class="Identifier">typedesc</span><span class="Other">[</span><span class="Identifier">string</span><span class="Other">]</span><span class="Other">)</span><span class="Other">:</span> <span class="Identifier">string</span></pre></dt>
 <dd>
 
 
 
 </dd>
 <a id="fromDbValue,DbValue,typedesc[seq[byte]]"></a>
-<dt><pre><span class="Keyword">proc</span> <a href="#fromDbValue%2CDbValue%2Ctypedesc%5Bseq%5Bbyte%5D%5D"><span class="Identifier">fromDbValue</span></a><span class="Other">(</span><span class="Identifier">val</span><span class="Other">:</span> <a href="tiny_sqlite.html#DbValue"><span class="Identifier">DbValue</span></a><span class="Other">;</span> <span class="Identifier">T</span><span class="Other">:</span> <span class="Identifier">typedesc</span><span class="Other">[</span><span class="Identifier">seq</span><span class="Other">[</span><span class="Identifier">byte</span><span class="Other">]</span><span class="Other">]</span><span class="Other">)</span><span class="Other">:</span> <span class="Identifier">seq</span><span class="Other">[</span><span class="Identifier">byte</span><span class="Other">]</span></pre></dt>
+<dt><pre><span class="Keyword">proc</span> <a href="#fromDbValue%2CDbValue%2Ctypedesc%5Bseq%5Bbyte%5D%5D"><span class="Identifier">fromDbValue</span></a><span class="Other">(</span><span class="Identifier">value</span><span class="Other">:</span> <a href="tiny_sqlite.html#DbValue"><span class="Identifier">DbValue</span></a><span class="Other">;</span> <span class="Identifier">T</span><span class="Other">:</span> <span class="Identifier">typedesc</span><span class="Other">[</span><span class="Identifier">seq</span><span class="Other">[</span><span class="Identifier">byte</span><span class="Other">]</span><span class="Other">]</span><span class="Other">)</span><span class="Other">:</span> <span class="Identifier">seq</span><span class="Other">[</span><span class="Identifier">byte</span><span class="Other">]</span></pre></dt>
 <dd>
 
 
 
 </dd>
 <a id="fromDbValue,DbValue,typedesc[DbValue]"></a>
-<dt><pre><span class="Keyword">proc</span> <a href="#fromDbValue%2CDbValue%2Ctypedesc%5BDbValue%5D"><span class="Identifier">fromDbValue</span></a><span class="Other">(</span><span class="Identifier">val</span><span class="Other">:</span> <a href="tiny_sqlite.html#DbValue"><span class="Identifier">DbValue</span></a><span class="Other">;</span> <span class="Identifier">T</span><span class="Other">:</span> <span class="Identifier">typedesc</span><span class="Other">[</span><a href="tiny_sqlite.html#DbValue"><span class="Identifier">DbValue</span></a><span class="Other">]</span><span class="Other">)</span><span class="Other">:</span> <span class="Identifier">T:type</span></pre></dt>
+<dt><pre><span class="Keyword">proc</span> <a href="#fromDbValue%2CDbValue%2Ctypedesc%5BDbValue%5D"><span class="Identifier">fromDbValue</span></a><span class="Other">(</span><span class="Identifier">value</span><span class="Other">:</span> <a href="tiny_sqlite.html#DbValue"><span class="Identifier">DbValue</span></a><span class="Other">;</span> <span class="Identifier">T</span><span class="Other">:</span> <span class="Identifier">typedesc</span><span class="Other">[</span><a href="tiny_sqlite.html#DbValue"><span class="Identifier">DbValue</span></a><span class="Other">]</span><span class="Other">)</span><span class="Other">:</span> <span class="Identifier">T:type</span></pre></dt>
 <dd>
 
 
 
 </dd>
 <a id="fromDbValue,DbValue,typedesc[Option[T]]"></a>
-<dt><pre><span class="Keyword">proc</span> <a href="#fromDbValue%2CDbValue%2Ctypedesc%5BOption%5BT%5D%5D"><span class="Identifier">fromDbValue</span></a><span class="Other">[</span><span class="Identifier">T</span><span class="Other">]</span><span class="Other">(</span><span class="Identifier">val</span><span class="Other">:</span> <a href="tiny_sqlite.html#DbValue"><span class="Identifier">DbValue</span></a><span class="Other">;</span> <span class="Operator">_</span><span class="Other">:</span> <span class="Identifier">typedesc</span><span class="Other">[</span><span class="Identifier">Option</span><span class="Other">[</span><span class="Identifier">T</span><span class="Other">]</span><span class="Other">]</span><span class="Other">)</span><span class="Other">:</span> <span class="Identifier">Option</span><span class="Other">[</span><span class="Identifier">T</span><span class="Other">]</span></pre></dt>
+<dt><pre><span class="Keyword">proc</span> <a href="#fromDbValue%2CDbValue%2Ctypedesc%5BOption%5BT%5D%5D"><span class="Identifier">fromDbValue</span></a><span class="Other">[</span><span class="Identifier">T</span><span class="Other">]</span><span class="Other">(</span><span class="Identifier">value</span><span class="Other">:</span> <a href="tiny_sqlite.html#DbValue"><span class="Identifier">DbValue</span></a><span class="Other">;</span> <span class="Operator">_</span><span class="Other">:</span> <span class="Identifier">typedesc</span><span class="Other">[</span><span class="Identifier">Option</span><span class="Other">[</span><span class="Identifier">T</span><span class="Other">]</span><span class="Other">]</span><span class="Other">)</span><span class="Other">:</span> <span class="Identifier">Option</span><span class="Other">[</span><span class="Identifier">T</span><span class="Other">]</span></pre></dt>
 <dd>
 
 
-
-</dd>
-<a id="unpack,openArray[DbValue],typedesc[T]"></a>
-<dt><pre><span class="Keyword">proc</span> <a href="#unpack%2CopenArray%5BDbValue%5D%2Ctypedesc%5BT%5D"><span class="Identifier">unpack</span></a><span class="Other">[</span><span class="Identifier">T</span><span class="Other">:</span> <span class="Keyword">tuple</span><span class="Other">]</span><span class="Other">(</span><span class="Identifier">row</span><span class="Other">:</span> <span class="Identifier">openArray</span><span class="Other">[</span><a href="tiny_sqlite.html#DbValue"><span class="Identifier">DbValue</span></a><span class="Other">]</span><span class="Other">;</span> <span class="Operator">_</span><span class="Other">:</span> <span class="Identifier">typedesc</span><span class="Other">[</span><span class="Identifier">T</span><span class="Other">]</span><span class="Other">)</span><span class="Other">:</span> <span class="Identifier">T</span></pre></dt>
-<dd>
-
-Call <tt class="docutils literal"><span class="pre">fromDbValue</span></tt> on each element of <tt class="docutils literal"><span class="pre">row</span></tt> and return it as a tuple.
 
 </dd>
 <a id="$,DbValue"></a>
@@ -470,6 +547,13 @@ Call <tt class="docutils literal"><span class="pre">fromDbValue</span></tt> on e
 <dd>
 
 
+
+</dd>
+<a id="==,DbValue,DbValue"></a>
+<dt><pre><span class="Keyword">proc</span> <a href="#%3D%3D%2CDbValue%2CDbValue"><span class="Identifier">`==`</span></a><span class="Other">(</span><span class="Identifier">a</span><span class="Other">,</span> <span class="Identifier">b</span><span class="Other">:</span> <a href="tiny_sqlite.html#DbValue"><span class="Identifier">DbValue</span></a><span class="Other">)</span><span class="Other">:</span> <span class="Identifier">bool</span> <span><span class="Other">{</span><span class="Other pragmadots">...</span><span class="Other">}</span></span><span class="pragmawrap"><span class="Other">{.</span><span class="pragma"><span class="Identifier">raises</span><span class="Other">:</span> <span class="Other">[</span><span class="Other">]</span><span class="Other">,</span> <span class="Identifier">tags</span><span class="Other">:</span> <span class="Other">[</span><span class="Other">]</span></span><span class="Other">.}</span></span></pre></dt>
+<dd>
+
+Returns true if <tt class="docutils literal"><span class="pre">a</span></tt> and <tt class="docutils literal"><span class="pre">b</span></tt> represents the same value.
 
 </dd>
 <a id="exec,DbConn,string,varargs[DbValue,toDbValue]"></a>
@@ -489,37 +573,42 @@ Executes <tt class="docutils literal"><span class="pre">sql</span></tt> repeated
 
 </dd>
 <a id="execScript,DbConn,string"></a>
-<dt><pre><span class="Keyword">proc</span> <a href="#execScript%2CDbConn%2Cstring"><span class="Identifier">execScript</span></a><span class="Other">(</span><span class="Identifier">db</span><span class="Other">:</span> <a href="tiny_sqlite.html#DbConn"><span class="Identifier">DbConn</span></a><span class="Other">;</span> <span class="Identifier">sql</span><span class="Other">:</span> <span class="Identifier">string</span><span class="Other">)</span> <span><span class="Other">{</span><span class="Other pragmadots">...</span><span class="Other">}</span></span><span class="pragmawrap"><span class="Other">{.</span><span class="pragma"><span class="Identifier">raises</span><span class="Other">:</span> <span class="Other">[</span><span class="Identifier">SqliteError</span><span class="Other">]</span><span class="Other">,</span> <span class="Identifier">tags</span><span class="Other">:</span> <span class="Other">[</span><span class="Identifier">RootEffect</span><span class="Other">]</span></span><span class="Other">.}</span></span></pre></dt>
+<dt><pre><span class="Keyword">proc</span> <a href="#execScript%2CDbConn%2Cstring"><span class="Identifier">execScript</span></a><span class="Other">(</span><span class="Identifier">db</span><span class="Other">:</span> <a href="tiny_sqlite.html#DbConn"><span class="Identifier">DbConn</span></a><span class="Other">;</span> <span class="Identifier">sql</span><span class="Other">:</span> <span class="Identifier">string</span><span class="Other">)</span> <span><span class="Other">{</span><span class="Other pragmadots">...</span><span class="Other">}</span></span><span class="pragmawrap"><span class="Other">{.</span><span class="pragma"><span class="Identifier">raises</span><span class="Other">:</span> <span class="Other">[</span><span class="Identifier">Exception</span><span class="Other">,</span> <span class="Identifier">SqliteError</span><span class="Other">,</span> <span class="Identifier">SqliteError</span><span class="Other">,</span>
+    <span class="Identifier">Exception</span><span class="Other">]</span><span class="Other">,</span> <span class="Identifier">tags</span><span class="Other">:</span> <span class="Other">[</span><span class="Identifier">RootEffect</span><span class="Other">]</span></span><span class="Other">.}</span></span></pre></dt>
 <dd>
 
 Executes <tt class="docutils literal"><span class="pre">sql</span></tt>, which can consist of multiple SQL statements. The statements are executed inside a transaction.
 
 </dd>
-<a id="rows,DbConn,string,varargs[DbValue,toDbValue]"></a>
-<dt><pre><span class="Keyword">proc</span> <a href="#rows%2CDbConn%2Cstring%2Cvarargs%5BDbValue%2CtoDbValue%5D"><span class="Identifier">rows</span></a><span class="Other">(</span><span class="Identifier">db</span><span class="Other">:</span> <a href="tiny_sqlite.html#DbConn"><span class="Identifier">DbConn</span></a><span class="Other">;</span> <span class="Identifier">sql</span><span class="Other">:</span> <span class="Identifier">string</span><span class="Other">;</span> <span class="Identifier">params</span><span class="Other">:</span> <span class="Identifier">varargs</span><span class="Other">[</span><a href="tiny_sqlite.html#DbValue"><span class="Identifier">DbValue</span></a><span class="Other">,</span> <span class="Identifier">toDbValue</span><span class="Other">]</span><span class="Other">)</span><span class="Other">:</span> <span class="Identifier">seq</span><span class="Other">[</span>
-    <span class="Identifier">seq</span><span class="Other">[</span><a href="tiny_sqlite.html#DbValue"><span class="Identifier">DbValue</span></a><span class="Other">]</span><span class="Other">]</span> <span><span class="Other">{</span><span class="Other pragmadots">...</span><span class="Other">}</span></span><span class="pragmawrap"><span class="Other">{.</span><span class="pragma"><span class="Identifier">raises</span><span class="Other">:</span> <span class="Other">[</span><span class="Identifier">SqliteError</span><span class="Other">,</span> <span class="Identifier">AssertionDefect</span><span class="Other">]</span><span class="Other">,</span> <span class="Identifier">tags</span><span class="Other">:</span> <span class="Other">[</span><span class="Other">]</span></span><span class="Other">.}</span></span></pre></dt>
+<a id="all,DbConn,string,varargs[DbValue,toDbValue]"></a>
+<dt><pre><span class="Keyword">proc</span> <a href="#all%2CDbConn%2Cstring%2Cvarargs%5BDbValue%2CtoDbValue%5D"><span class="Identifier">all</span></a><span class="Other">(</span><span class="Identifier">db</span><span class="Other">:</span> <a href="tiny_sqlite.html#DbConn"><span class="Identifier">DbConn</span></a><span class="Other">;</span> <span class="Identifier">sql</span><span class="Other">:</span> <span class="Identifier">string</span><span class="Other">;</span> <span class="Identifier">params</span><span class="Other">:</span> <span class="Identifier">varargs</span><span class="Other">[</span><a href="tiny_sqlite.html#DbValue"><span class="Identifier">DbValue</span></a><span class="Other">,</span> <span class="Identifier">toDbValue</span><span class="Other">]</span><span class="Other">)</span><span class="Other">:</span> <span class="Identifier">seq</span><span class="Other">[</span><a href="tiny_sqlite.html#ResultRow"><span class="Identifier">ResultRow</span></a><span class="Other">]</span> <span><span class="Other">{</span><span class="Other pragmadots">...</span><span class="Other">}</span></span><span class="pragmawrap"><span class="Other">{.</span><span class="pragma">
+    <span class="Identifier">raises</span><span class="Other">:</span> <span class="Other">[</span><span class="Identifier">SqliteError</span><span class="Other">,</span> <span class="Identifier">AssertionError</span><span class="Other">]</span><span class="Other">,</span> <span class="Identifier">tags</span><span class="Other">:</span> <span class="Other">[</span><span class="Other">]</span></span><span class="Other">.}</span></span></pre></dt>
 <dd>
 
 Executes <tt class="docutils literal"><span class="pre">sql</span></tt> and returns all resulting rows.
 
 </dd>
-<a id="openDatabase,string,int"></a>
-<dt><pre><span class="Keyword">proc</span> <a href="#openDatabase%2Cstring%2Cint"><span class="Identifier">openDatabase</span></a><span class="Other">(</span><span class="Identifier">path</span><span class="Other">:</span> <span class="Identifier">string</span><span class="Other">;</span> <span class="Identifier">mode</span> <span class="Other">=</span> <span class="Identifier">dbReadWrite</span><span class="Other">;</span> <span class="Identifier">cacheSize</span> <span class="Other">=</span> <span class="DecNumber">50</span><span class="Other">)</span><span class="Other">:</span> <a href="tiny_sqlite.html#DbConn"><span class="Identifier">DbConn</span></a> <span><span class="Other">{</span><span class="Other pragmadots">...</span><span class="Other">}</span></span><span class="pragmawrap"><span class="Other">{.</span><span class="pragma">
-    <span class="Identifier">raises</span><span class="Other">:</span> <span class="Other">[</span><span class="Identifier">SqliteError</span><span class="Other">]</span><span class="Other">,</span> <span class="Identifier">tags</span><span class="Other">:</span> <span class="Other">[</span><span class="Other">]</span></span><span class="Other">.}</span></span></pre></dt>
+<a id="one,DbConn,string,varargs[DbValue,toDbValue]"></a>
+<dt><pre><span class="Keyword">proc</span> <a href="#one%2CDbConn%2Cstring%2Cvarargs%5BDbValue%2CtoDbValue%5D"><span class="Identifier">one</span></a><span class="Other">(</span><span class="Identifier">db</span><span class="Other">:</span> <a href="tiny_sqlite.html#DbConn"><span class="Identifier">DbConn</span></a><span class="Other">;</span> <span class="Identifier">sql</span><span class="Other">:</span> <span class="Identifier">string</span><span class="Other">;</span> <span class="Identifier">params</span><span class="Other">:</span> <span class="Identifier">varargs</span><span class="Other">[</span><a href="tiny_sqlite.html#DbValue"><span class="Identifier">DbValue</span></a><span class="Other">,</span> <span class="Identifier">toDbValue</span><span class="Other">]</span><span class="Other">)</span><span class="Other">:</span> <span class="Identifier">Option</span><span class="Other">[</span><a href="tiny_sqlite.html#ResultRow"><span class="Identifier">ResultRow</span></a><span class="Other">]</span> <span><span class="Other">{</span><span class="Other pragmadots">...</span><span class="Other">}</span></span><span class="pragmawrap"><span class="Other">{.</span><span class="pragma">
+    <span class="Identifier">raises</span><span class="Other">:</span> <span class="Other">[</span><span class="Identifier">SqliteError</span><span class="Other">,</span> <span class="Identifier">AssertionError</span><span class="Other">]</span><span class="Other">,</span> <span class="Identifier">tags</span><span class="Other">:</span> <span class="Other">[</span><span class="Other">]</span></span><span class="Other">.}</span></span></pre></dt>
 <dd>
 
-<p>Open a new database connection to a database file. To create a in-memory database the special path <tt class="docutils literal"><span class="pre">&quot;:memory:&quot;</span></tt> can be used. If the database doesn't already exist and <tt class="docutils literal"><span class="pre">mode</span></tt> is <tt class="docutils literal"><span class="pre">dbReadWrite</span></tt>, the database will be created. If the database doesn't exist and <tt class="docutils literal"><span class="pre">mode</span></tt> is <tt class="docutils literal"><span class="pre">dbRead</span></tt>, a <tt class="docutils literal"><span class="pre">SqliteError</span></tt> exception will be raised.</p>
-<p>NOTE: To avoid memory leaks, <tt class="docutils literal"><span class="pre">db.close</span></tt> must be called when the database connection is no longer needed.</p>
+Executes <tt class="docutils literal"><span class="pre">sql</span></tt> and returns the first row found. Returns <tt class="docutils literal"><span class="pre">none(seq[DbValue])</span></tt> if no result was found.
 
-<p><strong class="examples_text">Examples:</strong></p>
-<pre class="listing"><span class="Keyword">let</span> <span class="Identifier">memDb</span> <span class="Other">=</span> <span class="Identifier">openDatabase</span><span class="Other">(</span><span class="StringLit">&quot;:memory:&quot;</span><span class="Other">)</span></pre>
+</dd>
+<a id="value,DbConn,string,varargs[DbValue,toDbValue]"></a>
+<dt><pre><span class="Keyword">proc</span> <a href="#value%2CDbConn%2Cstring%2Cvarargs%5BDbValue%2CtoDbValue%5D"><span class="Identifier">value</span></a><span class="Other">(</span><span class="Identifier">db</span><span class="Other">:</span> <a href="tiny_sqlite.html#DbConn"><span class="Identifier">DbConn</span></a><span class="Other">;</span> <span class="Identifier">sql</span><span class="Other">:</span> <span class="Identifier">string</span><span class="Other">;</span> <span class="Identifier">params</span><span class="Other">:</span> <span class="Identifier">varargs</span><span class="Other">[</span><a href="tiny_sqlite.html#DbValue"><span class="Identifier">DbValue</span></a><span class="Other">,</span> <span class="Identifier">toDbValue</span><span class="Other">]</span><span class="Other">)</span><span class="Other">:</span> <span class="Identifier">Option</span><span class="Other">[</span><a href="tiny_sqlite.html#DbValue"><span class="Identifier">DbValue</span></a><span class="Other">]</span> <span><span class="Other">{</span><span class="Other pragmadots">...</span><span class="Other">}</span></span><span class="pragmawrap"><span class="Other">{.</span><span class="pragma">
+    <span class="Identifier">raises</span><span class="Other">:</span> <span class="Other">[</span><span class="Identifier">SqliteError</span><span class="Other">,</span> <span class="Identifier">AssertionError</span><span class="Other">]</span><span class="Other">,</span> <span class="Identifier">tags</span><span class="Other">:</span> <span class="Other">[</span><span class="Other">]</span></span><span class="Other">.}</span></span></pre></dt>
+<dd>
+
+Executes <tt class="docutils literal"><span class="pre">sql</span></tt> and returns the first column of the first row found. Returns <tt class="docutils literal"><span class="pre">none(DbValue)</span></tt> if no result was found.
 
 </dd>
 <a id="close,DbConn"></a>
-<dt><pre><span class="Keyword">proc</span> <a href="#close%2CDbConn"><span class="Identifier">close</span></a><span class="Other">(</span><span class="Identifier">db</span><span class="Other">:</span> <a href="tiny_sqlite.html#DbConn"><span class="Identifier">DbConn</span></a><span class="Other">)</span> <span><span class="Other">{</span><span class="Other pragmadots">...</span><span class="Other">}</span></span><span class="pragmawrap"><span class="Other">{.</span><span class="pragma"><span class="Identifier">raises</span><span class="Other">:</span> <span class="Other">[</span><span class="Identifier">SqliteError</span><span class="Other">]</span><span class="Other">,</span> <span class="Identifier">tags</span><span class="Other">:</span> <span class="Other">[</span><span class="Other">]</span></span><span class="Other">.}</span></span></pre></dt>
+<dt><pre><span class="Keyword">proc</span> <a href="#close%2CDbConn"><span class="Identifier">close</span></a><span class="Other">(</span><span class="Identifier">db</span><span class="Other">:</span> <a href="tiny_sqlite.html#DbConn"><span class="Identifier">DbConn</span></a><span class="Other">)</span> <span><span class="Other">{</span><span class="Other pragmadots">...</span><span class="Other">}</span></span><span class="pragmawrap"><span class="Other">{.</span><span class="pragma"><span class="Identifier">raises</span><span class="Other">:</span> <span class="Other">[</span><span class="Identifier">Exception</span><span class="Other">,</span> <span class="Identifier">SqliteError</span><span class="Other">]</span><span class="Other">,</span> <span class="Identifier">tags</span><span class="Other">:</span> <span class="Other">[</span><span class="Identifier">RootEffect</span><span class="Other">]</span></span><span class="Other">.}</span></span></pre></dt>
 <dd>
 
-Closes the database connection. This should be called once the connection will no longer be used to avoid leaking memory.
+Closes the database connection. This should be called once the connection will no longer be used to avoid leaking memory. Closing an already closed database is a harmless no-op.
 
 </dd>
 <a id="lastInsertRowId,DbConn"></a>
@@ -548,7 +637,7 @@ Returns true if <tt class="docutils literal"><span class="pre">db</span></tt> is
 
 </dd>
 <a id="isOpen,DbConn"></a>
-<dt><pre><span class="Keyword">proc</span> <a href="#isOpen%2CDbConn"><span class="Identifier">isOpen</span></a><span class="Other">(</span><span class="Identifier">db</span><span class="Other">:</span> <a href="tiny_sqlite.html#DbConn"><span class="Identifier">DbConn</span></a><span class="Other">)</span><span class="Other">:</span> <span class="Identifier">bool</span> <span><span class="Other">{</span><span class="Other pragmadots">...</span><span class="Other">}</span></span><span class="pragmawrap"><span class="Other">{.</span><span class="pragma"><span class="Identifier">inline</span><span class="Other">,</span> <span class="Identifier">raises</span><span class="Other">:</span> <span class="Other">[</span><span class="Other">]</span><span class="Other">,</span> <span class="Identifier">tags</span><span class="Other">:</span> <span class="Other">[</span><span class="Other">]</span></span><span class="Other">.}</span></span></pre></dt>
+<dt><pre><span class="Keyword">proc</span> <a href="#isOpen%2CDbConn"><span class="Identifier">isOpen</span></a><span class="Other">(</span><span class="Identifier">db</span><span class="Other">:</span> <a href="tiny_sqlite.html#DbConn"><span class="Identifier">DbConn</span></a><span class="Other">)</span><span class="Other">:</span> <span class="Identifier">bool</span> <span><span class="Other">{</span><span class="Other pragmadots">...</span><span class="Other">}</span></span><span class="pragmawrap"><span class="Other">{.</span><span class="pragma"><span class="Identifier">noSideEffect</span><span class="Other">,</span> <span class="Identifier">inline</span><span class="Other">,</span> <span class="Identifier">raises</span><span class="Other">:</span> <span class="Other">[</span><span class="Other">]</span><span class="Other">,</span> <span class="Identifier">tags</span><span class="Other">:</span> <span class="Other">[</span><span class="Other">]</span></span><span class="Other">.}</span></span></pre></dt>
 <dd>
 
 
@@ -561,11 +650,148 @@ Returns true if <tt class="docutils literal"><span class="pre">db</span></tt> is
 Returns true if a transaction is currently active.
 
 </dd>
-<a id="handle,DbConn"></a>
-<dt><pre><span class="Keyword">proc</span> <a href="#handle%2CDbConn"><span class="Identifier">handle</span></a><span class="Other">(</span><span class="Identifier">db</span><span class="Other">:</span> <a href="tiny_sqlite.html#DbConn"><span class="Identifier">DbConn</span></a><span class="Other">)</span><span class="Other">:</span> <span class="Identifier">sqlite</span><span class="Other">.</span><span class="Identifier">PSqlite3</span> <span><span class="Other">{</span><span class="Other pragmadots">...</span><span class="Other">}</span></span><span class="pragmawrap"><span class="Other">{.</span><span class="pragma"><span class="Identifier">inline</span><span class="Other">,</span> <span class="Identifier">raises</span><span class="Other">:</span> <span class="Other">[</span><span class="Other">]</span><span class="Other">,</span> <span class="Identifier">tags</span><span class="Other">:</span> <span class="Other">[</span><span class="Other">]</span></span><span class="Other">.}</span></span></pre></dt>
+<a id="unsafeHandle,DbConn"></a>
+<dt><pre><span class="Keyword">proc</span> <a href="#unsafeHandle%2CDbConn"><span class="Identifier">unsafeHandle</span></a><span class="Other">(</span><span class="Identifier">db</span><span class="Other">:</span> <a href="tiny_sqlite.html#DbConn"><span class="Identifier">DbConn</span></a><span class="Other">)</span><span class="Other">:</span> <span class="Identifier">sqlite</span><span class="Other">.</span><span class="Identifier">Sqlite3</span> <span><span class="Other">{</span><span class="Other pragmadots">...</span><span class="Other">}</span></span><span class="pragmawrap"><span class="Other">{.</span><span class="pragma"><span class="Identifier">inline</span><span class="Other">,</span> <span class="Identifier">raises</span><span class="Other">:</span> <span class="Other">[</span><span class="Other">]</span><span class="Other">,</span> <span class="Identifier">tags</span><span class="Other">:</span> <span class="Other">[</span><span class="Other">]</span></span><span class="Other">.}</span></span></pre></dt>
 <dd>
 
-Returns the raw SQLite3 handle. This can be used to interact directly with the SQLite C API with the <tt class="docutils literal"><span class="pre">tiny_sqlite/sqlite_wrapper</span></tt> module.
+Returns the raw SQLite3 handle. This can be used to interact directly with the SQLite C API with the <tt class="docutils literal"><span class="pre">tiny_sqlite/sqlite_wrapper</span></tt> module. Note that the handle should not be used after <tt class="docutils literal"><span class="pre">db.close</span></tt> has been called as doing so would break memory safety.
+
+</dd>
+<a id="stmt,DbConn,string"></a>
+<dt><pre><span class="Keyword">proc</span> <a href="#stmt%2CDbConn%2Cstring"><span class="Identifier">stmt</span></a><span class="Other">(</span><span class="Identifier">db</span><span class="Other">:</span> <a href="tiny_sqlite.html#DbConn"><span class="Identifier">DbConn</span></a><span class="Other">;</span> <span class="Identifier">sql</span><span class="Other">:</span> <span class="Identifier">string</span><span class="Other">)</span><span class="Other">:</span> <a href="tiny_sqlite.html#SqlStatement"><span class="Identifier">SqlStatement</span></a> <span><span class="Other">{</span><span class="Other pragmadots">...</span><span class="Other">}</span></span><span class="pragmawrap"><span class="Other">{.</span><span class="pragma"><span class="Identifier">raises</span><span class="Other">:</span> <span class="Other">[</span><span class="Identifier">SqliteError</span><span class="Other">]</span><span class="Other">,</span> <span class="Identifier">tags</span><span class="Other">:</span> <span class="Other">[</span><span class="Other">]</span></span><span class="Other">.}</span></span></pre></dt>
+<dd>
+
+
+
+</dd>
+<a id="exec,SqlStatement,varargs[DbValue,toDbValue]"></a>
+<dt><pre><span class="Keyword">proc</span> <a href="#exec%2CSqlStatement%2Cvarargs%5BDbValue%2CtoDbValue%5D"><span class="Identifier">exec</span></a><span class="Other">(</span><span class="Identifier">statement</span><span class="Other">:</span> <a href="tiny_sqlite.html#SqlStatement"><span class="Identifier">SqlStatement</span></a><span class="Other">;</span> <span class="Identifier">params</span><span class="Other">:</span> <span class="Identifier">varargs</span><span class="Other">[</span><a href="tiny_sqlite.html#DbValue"><span class="Identifier">DbValue</span></a><span class="Other">,</span> <span class="Identifier">toDbValue</span><span class="Other">]</span><span class="Other">)</span> <span><span class="Other">{</span><span class="Other pragmadots">...</span><span class="Other">}</span></span><span class="pragmawrap"><span class="Other">{.</span><span class="pragma">
+    <span class="Identifier">raises</span><span class="Other">:</span> <span class="Other">[</span><span class="Identifier">SqliteError</span><span class="Other">]</span><span class="Other">,</span> <span class="Identifier">tags</span><span class="Other">:</span> <span class="Other">[</span><span class="Other">]</span></span><span class="Other">.}</span></span></pre></dt>
+<dd>
+
+
+
+</dd>
+<a id="execMany,SqlStatement,seq[seq[DbValue]]"></a>
+<dt><pre><span class="Keyword">proc</span> <a href="#execMany%2CSqlStatement%2Cseq%5Bseq%5BDbValue%5D%5D"><span class="Identifier">execMany</span></a><span class="Other">(</span><span class="Identifier">statement</span><span class="Other">:</span> <a href="tiny_sqlite.html#SqlStatement"><span class="Identifier">SqlStatement</span></a><span class="Other">;</span> <span class="Identifier">params</span><span class="Other">:</span> <span class="Identifier">seq</span><span class="Other">[</span><span class="Identifier">seq</span><span class="Other">[</span><a href="tiny_sqlite.html#DbValue"><span class="Identifier">DbValue</span></a><span class="Other">]</span><span class="Other">]</span><span class="Other">)</span> <span><span class="Other">{</span><span class="Other pragmadots">...</span><span class="Other">}</span></span><span class="pragmawrap"><span class="Other">{.</span><span class="pragma">
+    <span class="Identifier">raises</span><span class="Other">:</span> <span class="Other">[</span><span class="Identifier">SqliteError</span><span class="Other">,</span> <span class="Identifier">SqliteError</span><span class="Other">,</span> <span class="Identifier">Exception</span><span class="Other">]</span><span class="Other">,</span> <span class="Identifier">tags</span><span class="Other">:</span> <span class="Other">[</span><span class="Other">]</span></span><span class="Other">.}</span></span></pre></dt>
+<dd>
+
+Executes <tt class="docutils literal"><span class="pre">statement</span></tt> repeatedly using each element of <tt class="docutils literal"><span class="pre">params</span></tt> as parameters. The statements are executed inside a transaction.
+
+</dd>
+<a id="all,SqlStatement,varargs[DbValue,toDbValue]"></a>
+<dt><pre><span class="Keyword">proc</span> <a href="#all%2CSqlStatement%2Cvarargs%5BDbValue%2CtoDbValue%5D"><span class="Identifier">all</span></a><span class="Other">(</span><span class="Identifier">statement</span><span class="Other">:</span> <a href="tiny_sqlite.html#SqlStatement"><span class="Identifier">SqlStatement</span></a><span class="Other">;</span> <span class="Identifier">params</span><span class="Other">:</span> <span class="Identifier">varargs</span><span class="Other">[</span><a href="tiny_sqlite.html#DbValue"><span class="Identifier">DbValue</span></a><span class="Other">,</span> <span class="Identifier">toDbValue</span><span class="Other">]</span><span class="Other">)</span><span class="Other">:</span> <span class="Identifier">seq</span><span class="Other">[</span><a href="tiny_sqlite.html#ResultRow"><span class="Identifier">ResultRow</span></a><span class="Other">]</span> <span><span class="Other">{</span><span class="Other pragmadots">...</span><span class="Other">}</span></span><span class="pragmawrap"><span class="Other">{.</span><span class="pragma">
+    <span class="Identifier">raises</span><span class="Other">:</span> <span class="Other">[</span><span class="Identifier">SqliteError</span><span class="Other">,</span> <span class="Identifier">AssertionError</span><span class="Other">]</span><span class="Other">,</span> <span class="Identifier">tags</span><span class="Other">:</span> <span class="Other">[</span><span class="Other">]</span></span><span class="Other">.}</span></span></pre></dt>
+<dd>
+
+
+
+</dd>
+<a id="one,SqlStatement,varargs[DbValue,toDbValue]"></a>
+<dt><pre><span class="Keyword">proc</span> <a href="#one%2CSqlStatement%2Cvarargs%5BDbValue%2CtoDbValue%5D"><span class="Identifier">one</span></a><span class="Other">(</span><span class="Identifier">statement</span><span class="Other">:</span> <a href="tiny_sqlite.html#SqlStatement"><span class="Identifier">SqlStatement</span></a><span class="Other">;</span> <span class="Identifier">params</span><span class="Other">:</span> <span class="Identifier">varargs</span><span class="Other">[</span><a href="tiny_sqlite.html#DbValue"><span class="Identifier">DbValue</span></a><span class="Other">,</span> <span class="Identifier">toDbValue</span><span class="Other">]</span><span class="Other">)</span><span class="Other">:</span> <span class="Identifier">Option</span><span class="Other">[</span>
+    <a href="tiny_sqlite.html#ResultRow"><span class="Identifier">ResultRow</span></a><span class="Other">]</span> <span><span class="Other">{</span><span class="Other pragmadots">...</span><span class="Other">}</span></span><span class="pragmawrap"><span class="Other">{.</span><span class="pragma"><span class="Identifier">raises</span><span class="Other">:</span> <span class="Other">[</span><span class="Identifier">SqliteError</span><span class="Other">,</span> <span class="Identifier">AssertionError</span><span class="Other">]</span><span class="Other">,</span> <span class="Identifier">tags</span><span class="Other">:</span> <span class="Other">[</span><span class="Other">]</span></span><span class="Other">.}</span></span></pre></dt>
+<dd>
+
+Executes <tt class="docutils literal"><span class="pre">statement</span></tt> and returns the first row found. Returns <tt class="docutils literal"><span class="pre">none(seq[DbValue])</span></tt> if no result was found.
+
+</dd>
+<a id="value,SqlStatement,varargs[DbValue,toDbValue]"></a>
+<dt><pre><span class="Keyword">proc</span> <a href="#value%2CSqlStatement%2Cvarargs%5BDbValue%2CtoDbValue%5D"><span class="Identifier">value</span></a><span class="Other">(</span><span class="Identifier">statement</span><span class="Other">:</span> <a href="tiny_sqlite.html#SqlStatement"><span class="Identifier">SqlStatement</span></a><span class="Other">;</span> <span class="Identifier">params</span><span class="Other">:</span> <span class="Identifier">varargs</span><span class="Other">[</span><a href="tiny_sqlite.html#DbValue"><span class="Identifier">DbValue</span></a><span class="Other">,</span> <span class="Identifier">toDbValue</span><span class="Other">]</span><span class="Other">)</span><span class="Other">:</span> <span class="Identifier">Option</span><span class="Other">[</span>
+    <a href="tiny_sqlite.html#DbValue"><span class="Identifier">DbValue</span></a><span class="Other">]</span> <span><span class="Other">{</span><span class="Other pragmadots">...</span><span class="Other">}</span></span><span class="pragmawrap"><span class="Other">{.</span><span class="pragma"><span class="Identifier">raises</span><span class="Other">:</span> <span class="Other">[</span><span class="Identifier">SqliteError</span><span class="Other">,</span> <span class="Identifier">AssertionError</span><span class="Other">]</span><span class="Other">,</span> <span class="Identifier">tags</span><span class="Other">:</span> <span class="Other">[</span><span class="Other">]</span></span><span class="Other">.}</span></span></pre></dt>
+<dd>
+
+Executes <tt class="docutils literal"><span class="pre">statement</span></tt> and returns the first column of the first row found. Returns <tt class="docutils literal"><span class="pre">none(DbValue)</span></tt> if no result was found.
+
+</dd>
+<a id="finalize,SqlStatement"></a>
+<dt><pre><span class="Keyword">proc</span> <a href="#finalize%2CSqlStatement"><span class="Identifier">finalize</span></a><span class="Other">(</span><span class="Identifier">statement</span><span class="Other">:</span> <a href="tiny_sqlite.html#SqlStatement"><span class="Identifier">SqlStatement</span></a><span class="Other">)</span><span class="Other">:</span> <span class="Identifier">void</span> <span><span class="Other">{</span><span class="Other pragmadots">...</span><span class="Other">}</span></span><span class="pragmawrap"><span class="Other">{.</span><span class="pragma"><span class="Identifier">raises</span><span class="Other">:</span> <span class="Other">[</span><span class="Other">]</span><span class="Other">,</span> <span class="Identifier">tags</span><span class="Other">:</span> <span class="Other">[</span><span class="Other">]</span></span><span class="Other">.}</span></span></pre></dt>
+<dd>
+
+
+
+</dd>
+<a id="isAlive,SqlStatement"></a>
+<dt><pre><span class="Keyword">proc</span> <a href="#isAlive%2CSqlStatement"><span class="Identifier">isAlive</span></a><span class="Other">(</span><span class="Identifier">statement</span><span class="Other">:</span> <a href="tiny_sqlite.html#SqlStatement"><span class="Identifier">SqlStatement</span></a><span class="Other">)</span><span class="Other">:</span> <span class="Identifier">bool</span> <span><span class="Other">{</span><span class="Other pragmadots">...</span><span class="Other">}</span></span><span class="pragmawrap"><span class="Other">{.</span><span class="pragma"><span class="Identifier">raises</span><span class="Other">:</span> <span class="Other">[</span><span class="Other">]</span><span class="Other">,</span> <span class="Identifier">tags</span><span class="Other">:</span> <span class="Other">[</span><span class="Other">]</span></span><span class="Other">.}</span></span></pre></dt>
+<dd>
+
+
+
+</dd>
+<a id="openDatabase,string,Natural"></a>
+<dt><pre><span class="Keyword">proc</span> <a href="#openDatabase%2Cstring%2CNatural"><span class="Identifier">openDatabase</span></a><span class="Other">(</span><span class="Identifier">path</span><span class="Other">:</span> <span class="Identifier">string</span><span class="Other">;</span> <span class="Identifier">mode</span> <span class="Other">=</span> <span class="Identifier">dbReadWrite</span><span class="Other">;</span> <span class="Identifier">cacheSize</span><span class="Other">:</span> <span class="Identifier">Natural</span> <span class="Other">=</span> <span class="DecNumber">50</span><span class="Other">)</span><span class="Other">:</span> <a href="tiny_sqlite.html#DbConn"><span class="Identifier">DbConn</span></a> <span><span class="Other">{</span><span class="Other pragmadots">...</span><span class="Other">}</span></span><span class="pragmawrap"><span class="Other">{.</span><span class="pragma">
+    <span class="Identifier">raises</span><span class="Other">:</span> <span class="Other">[</span><span class="Identifier">SqliteError</span><span class="Other">]</span><span class="Other">,</span> <span class="Identifier">tags</span><span class="Other">:</span> <span class="Other">[</span><span class="Other">]</span></span><span class="Other">.}</span></span></pre></dt>
+<dd>
+
+<p>Open a new database connection to a database file. To create an in-memory database the special path <tt class="docutils literal"><span class="pre">&quot;:memory:&quot;</span></tt> can be used. If the database doesn't already exist and <tt class="docutils literal"><span class="pre">mode</span></tt> is <tt class="docutils literal"><span class="pre">dbReadWrite</span></tt>, the database will be created. If the database doesn't exist and <tt class="docutils literal"><span class="pre">mode</span></tt> is <tt class="docutils literal"><span class="pre">dbRead</span></tt>, a <tt class="docutils literal"><span class="pre">SqliteError</span></tt> exception will be raised.</p>
+<p>NOTE: To avoid memory leaks, <tt class="docutils literal"><span class="pre">db.close</span></tt> must be called when the database connection is no longer needed.</p>
+
+<p><strong class="examples_text">Examples:</strong></p>
+<pre class="listing"><span class="Keyword">let</span> <span class="Identifier">memDb</span> <span class="Other">=</span> <span class="Identifier">openDatabase</span><span class="Other">(</span><span class="StringLit">&quot;:memory:&quot;</span><span class="Other">)</span></pre>
+
+</dd>
+<a id="[],ResultRow,int"></a>
+<dt><pre><span class="Keyword">proc</span> <a href="#%5B%5D%2CResultRow%2Cint"><span class="Identifier">`[]`</span></a><span class="Other">(</span><span class="Identifier">row</span><span class="Other">:</span> <a href="tiny_sqlite.html#ResultRow"><span class="Identifier">ResultRow</span></a><span class="Other">;</span> <span class="Identifier">idx</span><span class="Other">:</span> <span class="Identifier">int</span><span class="Other">)</span><span class="Other">:</span> <a href="tiny_sqlite.html#DbValue"><span class="Identifier">DbValue</span></a> <span><span class="Other">{</span><span class="Other pragmadots">...</span><span class="Other">}</span></span><span class="pragmawrap"><span class="Other">{.</span><span class="pragma"><span class="Identifier">raises</span><span class="Other">:</span> <span class="Other">[</span><span class="Other">]</span><span class="Other">,</span> <span class="Identifier">tags</span><span class="Other">:</span> <span class="Other">[</span><span class="Other">]</span></span><span class="Other">.}</span></span></pre></dt>
+<dd>
+
+
+
+</dd>
+<a id="[],ResultRow,string"></a>
+<dt><pre><span class="Keyword">proc</span> <a href="#%5B%5D%2CResultRow%2Cstring"><span class="Identifier">`[]`</span></a><span class="Other">(</span><span class="Identifier">row</span><span class="Other">:</span> <a href="tiny_sqlite.html#ResultRow"><span class="Identifier">ResultRow</span></a><span class="Other">;</span> <span class="Identifier">column</span><span class="Other">:</span> <span class="Identifier">string</span><span class="Other">)</span><span class="Other">:</span> <a href="tiny_sqlite.html#DbValue"><span class="Identifier">DbValue</span></a> <span><span class="Other">{</span><span class="Other pragmadots">...</span><span class="Other">}</span></span><span class="pragmawrap"><span class="Other">{.</span><span class="pragma"><span class="Identifier">raises</span><span class="Other">:</span> <span class="Other">[</span><span class="Other">]</span><span class="Other">,</span> <span class="Identifier">tags</span><span class="Other">:</span> <span class="Other">[</span><span class="Other">]</span></span><span class="Other">.}</span></span></pre></dt>
+<dd>
+
+
+
+</dd>
+<a id="len,ResultRow"></a>
+<dt><pre><span class="Keyword">proc</span> <a href="#len%2CResultRow"><span class="Identifier">len</span></a><span class="Other">(</span><span class="Identifier">row</span><span class="Other">:</span> <a href="tiny_sqlite.html#ResultRow"><span class="Identifier">ResultRow</span></a><span class="Other">)</span><span class="Other">:</span> <span class="Identifier">int</span> <span><span class="Other">{</span><span class="Other pragmadots">...</span><span class="Other">}</span></span><span class="pragmawrap"><span class="Other">{.</span><span class="pragma"><span class="Identifier">raises</span><span class="Other">:</span> <span class="Other">[</span><span class="Other">]</span><span class="Other">,</span> <span class="Identifier">tags</span><span class="Other">:</span> <span class="Other">[</span><span class="Other">]</span></span><span class="Other">.}</span></span></pre></dt>
+<dd>
+
+
+
+</dd>
+<a id="values,ResultRow"></a>
+<dt><pre><span class="Keyword">proc</span> <a href="#values%2CResultRow"><span class="Identifier">values</span></a><span class="Other">(</span><span class="Identifier">row</span><span class="Other">:</span> <a href="tiny_sqlite.html#ResultRow"><span class="Identifier">ResultRow</span></a><span class="Other">)</span><span class="Other">:</span> <span class="Identifier">seq</span><span class="Other">[</span><a href="tiny_sqlite.html#DbValue"><span class="Identifier">DbValue</span></a><span class="Other">]</span> <span><span class="Other">{</span><span class="Other pragmadots">...</span><span class="Other">}</span></span><span class="pragmawrap"><span class="Other">{.</span><span class="pragma"><span class="Identifier">raises</span><span class="Other">:</span> <span class="Other">[</span><span class="Other">]</span><span class="Other">,</span> <span class="Identifier">tags</span><span class="Other">:</span> <span class="Other">[</span><span class="Other">]</span></span><span class="Other">.}</span></span></pre></dt>
+<dd>
+
+
+
+</dd>
+<a id="columns,ResultRow"></a>
+<dt><pre><span class="Keyword">proc</span> <a href="#columns%2CResultRow"><span class="Identifier">columns</span></a><span class="Other">(</span><span class="Identifier">row</span><span class="Other">:</span> <a href="tiny_sqlite.html#ResultRow"><span class="Identifier">ResultRow</span></a><span class="Other">)</span><span class="Other">:</span> <span class="Identifier">seq</span><span class="Other">[</span><span class="Identifier">string</span><span class="Other">]</span> <span><span class="Other">{</span><span class="Other pragmadots">...</span><span class="Other">}</span></span><span class="pragmawrap"><span class="Other">{.</span><span class="pragma"><span class="Identifier">raises</span><span class="Other">:</span> <span class="Other">[</span><span class="Other">]</span><span class="Other">,</span> <span class="Identifier">tags</span><span class="Other">:</span> <span class="Other">[</span><span class="Other">]</span></span><span class="Other">.}</span></span></pre></dt>
+<dd>
+
+
+
+</dd>
+<a id="unpack,ResultRow,typedesc[T]"></a>
+<dt><pre><span class="Keyword">proc</span> <a href="#unpack%2CResultRow%2Ctypedesc%5BT%5D"><span class="Identifier">unpack</span></a><span class="Other">[</span><span class="Identifier">T</span><span class="Other">:</span> <span class="Keyword">tuple</span><span class="Other">]</span><span class="Other">(</span><span class="Identifier">row</span><span class="Other">:</span> <a href="tiny_sqlite.html#ResultRow"><span class="Identifier">ResultRow</span></a><span class="Other">;</span> <span class="Operator">_</span><span class="Other">:</span> <span class="Identifier">typedesc</span><span class="Other">[</span><span class="Identifier">T</span><span class="Other">]</span><span class="Other">)</span><span class="Other">:</span> <span class="Identifier">T</span></pre></dt>
+<dd>
+
+Call <tt class="docutils literal"><span class="pre">fromDbValue</span></tt> on each element of <tt class="docutils literal"><span class="pre">row</span></tt> and return it as a tuple.
+
+</dd>
+<a id="rows,DbConn,string,varargs[DbValue,toDbValue]"></a>
+<dt><pre><span class="Keyword">proc</span> <a href="#rows%2CDbConn%2Cstring%2Cvarargs%5BDbValue%2CtoDbValue%5D"><span class="Identifier">rows</span></a><span class="Other">(</span><span class="Identifier">db</span><span class="Other">:</span> <a href="tiny_sqlite.html#DbConn"><span class="Identifier">DbConn</span></a><span class="Other">;</span> <span class="Identifier">sql</span><span class="Other">:</span> <span class="Identifier">string</span><span class="Other">;</span> <span class="Identifier">params</span><span class="Other">:</span> <span class="Identifier">varargs</span><span class="Other">[</span><a href="tiny_sqlite.html#DbValue"><span class="Identifier">DbValue</span></a><span class="Other">,</span> <span class="Identifier">toDbValue</span><span class="Other">]</span><span class="Other">)</span><span class="Other">:</span> <span class="Identifier">seq</span><span class="Other">[</span><a href="tiny_sqlite.html#ResultRow"><span class="Identifier">ResultRow</span></a><span class="Other">]</span> <span><span class="Other">{</span><span class="Other pragmadots">...</span><span class="Other">}</span></span><span class="pragmawrap"><span class="Other">{.</span><span class="pragma">
+    <span class="Identifier">deprecated</span><span class="Other">:</span> <span class="StringLit">&quot;use \'all\' instead&quot;</span><span class="Other">,</span> <span class="Identifier">raises</span><span class="Other">:</span> <span class="Other">[</span><span class="Identifier">SqliteError</span><span class="Other">,</span> <span class="Identifier">AssertionError</span><span class="Other">]</span><span class="Other">,</span>
+    <span class="Identifier">tags</span><span class="Other">:</span> <span class="Other">[</span><span class="Other">]</span></span><span class="Other">.}</span></span></pre></dt>
+<dd>
+  <div class="deprecation-message">
+    <b>Deprecated:</b> use &apos;all&apos; instead
+  </div>
+
+
+
+</dd>
+<a id="unpack,seq[DbValue],typedesc[T]"></a>
+<dt><pre><span class="Keyword">proc</span> <a href="#unpack%2Cseq%5BDbValue%5D%2Ctypedesc%5BT%5D"><span class="Identifier">unpack</span></a><span class="Other">[</span><span class="Identifier">T</span><span class="Other">:</span> <span class="Keyword">tuple</span><span class="Other">]</span><span class="Other">(</span><span class="Identifier">row</span><span class="Other">:</span> <span class="Identifier">seq</span><span class="Other">[</span><a href="tiny_sqlite.html#DbValue"><span class="Identifier">DbValue</span></a><span class="Other">]</span><span class="Other">;</span> <span class="Operator">_</span><span class="Other">:</span> <span class="Identifier">typedesc</span><span class="Other">[</span><span class="Identifier">T</span><span class="Other">]</span><span class="Other">)</span><span class="Other">:</span> <span class="Identifier">T</span> <span><span class="Other">{</span><span class="Other pragmadots">...</span><span class="Other">}</span></span><span class="pragmawrap"><span class="Other">{.</span><span class="pragma"><span class="Identifier">deprecated</span></span><span class="Other">.}</span></span></pre></dt>
+<dd>
+  <div class="deprecation-message">
+    <b>Deprecated</b> 
+  </div>
+
+
 
 </dd>
 
@@ -573,12 +799,32 @@ Returns the raw SQLite3 handle. This can be used to interact directly with the S
 <div class="section" id="15">
 <h1><a class="toc-backref" href="#15">Iterators</a></h1>
 <dl class="item">
-<a id="rows.i,DbConn,string,varargs[DbValue,toDbValue]"></a>
-<dt><pre><span class="Keyword">iterator</span> <a href="#rows.i%2CDbConn%2Cstring%2Cvarargs%5BDbValue%2CtoDbValue%5D"><span class="Identifier">rows</span></a><span class="Other">(</span><span class="Identifier">db</span><span class="Other">:</span> <a href="tiny_sqlite.html#DbConn"><span class="Identifier">DbConn</span></a><span class="Other">;</span> <span class="Identifier">sql</span><span class="Other">:</span> <span class="Identifier">string</span><span class="Other">;</span> <span class="Identifier">params</span><span class="Other">:</span> <span class="Identifier">varargs</span><span class="Other">[</span><a href="tiny_sqlite.html#DbValue"><span class="Identifier">DbValue</span></a><span class="Other">,</span> <span class="Identifier">toDbValue</span><span class="Other">]</span><span class="Other">)</span><span class="Other">:</span> <span class="Identifier">seq</span><span class="Other">[</span><a href="tiny_sqlite.html#DbValue"><span class="Identifier">DbValue</span></a><span class="Other">]</span> <span><span class="Other">{</span><span class="Other pragmadots">...</span><span class="Other">}</span></span><span class="pragmawrap"><span class="Other">{.</span><span class="pragma">
-    <span class="Identifier">raises</span><span class="Other">:</span> <span class="Other">[</span><span class="Identifier">SqliteError</span><span class="Other">,</span> <span class="Identifier">AssertionDefect</span><span class="Other">,</span> <span class="Identifier">SqliteError</span><span class="Other">]</span><span class="Other">,</span> <span class="Identifier">tags</span><span class="Other">:</span> <span class="Other">[</span><span class="Other">]</span></span><span class="Other">.}</span></span></pre></dt>
+<a id="iterate.i,DbConn,string,varargs[DbValue,toDbValue]"></a>
+<dt><pre><span class="Keyword">iterator</span> <a href="#iterate.i%2CDbConn%2Cstring%2Cvarargs%5BDbValue%2CtoDbValue%5D"><span class="Identifier">iterate</span></a><span class="Other">(</span><span class="Identifier">db</span><span class="Other">:</span> <a href="tiny_sqlite.html#DbConn"><span class="Identifier">DbConn</span></a><span class="Other">;</span> <span class="Identifier">sql</span><span class="Other">:</span> <span class="Identifier">string</span><span class="Other">;</span> <span class="Identifier">params</span><span class="Other">:</span> <span class="Identifier">varargs</span><span class="Other">[</span><a href="tiny_sqlite.html#DbValue"><span class="Identifier">DbValue</span></a><span class="Other">,</span> <span class="Identifier">toDbValue</span><span class="Other">]</span><span class="Other">)</span><span class="Other">:</span> <a href="tiny_sqlite.html#ResultRow"><span class="Identifier">ResultRow</span></a> <span><span class="Other">{</span><span class="Other pragmadots">...</span><span class="Other">}</span></span><span class="pragmawrap"><span class="Other">{.</span><span class="pragma">
+    <span class="Identifier">raises</span><span class="Other">:</span> <span class="Other">[</span><span class="Identifier">SqliteError</span><span class="Other">,</span> <span class="Identifier">SqliteError</span><span class="Other">,</span> <span class="Identifier">AssertionError</span><span class="Other">]</span><span class="Other">,</span> <span class="Identifier">tags</span><span class="Other">:</span> <span class="Other">[</span><span class="Other">]</span></span><span class="Other">.}</span></span></pre></dt>
 <dd>
 
-Executes <tt class="docutils literal"><span class="pre">sql</span></tt> and yield each resulting row.
+Executes <tt class="docutils literal"><span class="pre">sql</span></tt> and yields each row one by one.
+
+</dd>
+<a id="iterate.i,SqlStatement,varargs[DbValue,toDbValue]"></a>
+<dt><pre><span class="Keyword">iterator</span> <a href="#iterate.i%2CSqlStatement%2Cvarargs%5BDbValue%2CtoDbValue%5D"><span class="Identifier">iterate</span></a><span class="Other">(</span><span class="Identifier">statement</span><span class="Other">:</span> <a href="tiny_sqlite.html#SqlStatement"><span class="Identifier">SqlStatement</span></a><span class="Other">;</span> <span class="Identifier">params</span><span class="Other">:</span> <span class="Identifier">varargs</span><span class="Other">[</span><a href="tiny_sqlite.html#DbValue"><span class="Identifier">DbValue</span></a><span class="Other">,</span> <span class="Identifier">toDbValue</span><span class="Other">]</span><span class="Other">)</span><span class="Other">:</span> <a href="tiny_sqlite.html#ResultRow"><span class="Identifier">ResultRow</span></a> <span><span class="Other">{</span><span class="Other pragmadots">...</span><span class="Other">}</span></span><span class="pragmawrap"><span class="Other">{.</span><span class="pragma">
+    <span class="Identifier">raises</span><span class="Other">:</span> <span class="Other">[</span><span class="Identifier">SqliteError</span><span class="Other">,</span> <span class="Identifier">AssertionError</span><span class="Other">]</span><span class="Other">,</span> <span class="Identifier">tags</span><span class="Other">:</span> <span class="Other">[</span><span class="Other">]</span></span><span class="Other">.}</span></span></pre></dt>
+<dd>
+
+Executes <tt class="docutils literal"><span class="pre">statement</span></tt> and yields each row one by one.
+
+</dd>
+<a id="rows.i,DbConn,string,varargs[DbValue,toDbValue]"></a>
+<dt><pre><span class="Keyword">iterator</span> <a href="#rows.i%2CDbConn%2Cstring%2Cvarargs%5BDbValue%2CtoDbValue%5D"><span class="Identifier">rows</span></a><span class="Other">(</span><span class="Identifier">db</span><span class="Other">:</span> <a href="tiny_sqlite.html#DbConn"><span class="Identifier">DbConn</span></a><span class="Other">;</span> <span class="Identifier">sql</span><span class="Other">:</span> <span class="Identifier">string</span><span class="Other">;</span> <span class="Identifier">params</span><span class="Other">:</span> <span class="Identifier">varargs</span><span class="Other">[</span><a href="tiny_sqlite.html#DbValue"><span class="Identifier">DbValue</span></a><span class="Other">,</span> <span class="Identifier">toDbValue</span><span class="Other">]</span><span class="Other">)</span><span class="Other">:</span> <a href="tiny_sqlite.html#ResultRow"><span class="Identifier">ResultRow</span></a> <span><span class="Other">{</span><span class="Other pragmadots">...</span><span class="Other">}</span></span><span class="pragmawrap"><span class="Other">{.</span><span class="pragma">
+    <span class="Identifier">deprecated</span><span class="Other">:</span> <span class="StringLit">&quot;use \'all\' instead&quot;</span><span class="Other">,</span> <span class="Identifier">raises</span><span class="Other">:</span> <span class="Other">[</span><span class="Identifier">SqliteError</span><span class="Other">,</span> <span class="Identifier">AssertionError</span><span class="Other">]</span><span class="Other">,</span>
+    <span class="Identifier">tags</span><span class="Other">:</span> <span class="Other">[</span><span class="Other">]</span></span><span class="Other">.}</span></span></pre></dt>
+<dd>
+  <div class="deprecation-message">
+    <b>Deprecated:</b> use &apos;all&apos; instead
+  </div>
+
+
 
 </dd>
 
@@ -590,7 +836,7 @@ Executes <tt class="docutils literal"><span class="pre">sql</span></tt> and yiel
 <dt><pre><span class="Keyword">template</span> <a href="#transaction.t%2CDbConn%2Cuntyped"><span class="Identifier">transaction</span></a><span class="Other">(</span><span class="Identifier">db</span><span class="Other">:</span> <a href="tiny_sqlite.html#DbConn"><span class="Identifier">DbConn</span></a><span class="Other">;</span> <span class="Identifier">body</span><span class="Other">:</span> <span class="Identifier">untyped</span><span class="Other">)</span></pre></dt>
 <dd>
 
-
+Starts a transaction and runs <tt class="docutils literal"><span class="pre">body</span></tt> within it. At the end the transaction is commited. If an error is raised by <tt class="docutils literal"><span class="pre">body</span></tt> the transaction is rolled back. Nesting transactions is a no-op.
 
 </dd>
 
@@ -603,7 +849,7 @@ Executes <tt class="docutils literal"><span class="pre">sql</span></tt> and yiel
       <div class="twelve-columns footer">
         <span class="nim-sprite"></span>
         <br/>
-        <small style="color: var(--hint);">Made with Nim. Generated: 2020-06-18 22:12:24 UTC</small>
+        <small style="color: var(--hint);">Made with Nim. Generated: 2020-07-06 10:40:48 UTC</small>
       </div>
     </div>
   </div>
