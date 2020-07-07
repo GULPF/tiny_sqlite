@@ -6,12 +6,10 @@ from tiny_sqlite / sqlite_wrapper as sqlite import nil
 type
     DbConnImpl = ref object 
         handle: sqlite.Sqlite3 ## The underlying SQLite3 handle
-        cache: OrderedTable[string, PreparedSql]
+        cache: OrderedTable[string, sqlite.Stmt]
         cacheSize: int
 
     DbConn* = distinct DbConnImpl ## Encapsulates a database connection.
-
-    PreparedSql = sqlite.Stmt
 
     SqlStatementImpl = ref object
         handle: sqlite.Stmt
@@ -66,7 +64,7 @@ proc isOpen*(db: DbConn): bool {.noSideEffect, inline.}
 template handle(db: DbConn): sqlite.Sqlite3 = DbConnImpl(db).handle
 template handle(statement: SqlStatement): sqlite.Stmt = SqlStatementImpl(statement).handle
 template db(statement: SqlStatement): DbConn = SqlStatementImpl(statement).db
-template cache(db: DbConn): OrderedTable[string, PreparedSql] = DbConnImpl(db).cache
+template cache(db: DbConn): OrderedTable[string, sqlite.Stmt] = DbConnImpl(db).cache
 template cacheSize(db: DbConn): int = DbConnImpl(db).cacheSize
 
 template assertCanUseDb(db: DbConn) =
@@ -93,7 +91,7 @@ template checkRc(db: DbConn, rc: Rc) =
     if rc notin SqliteRcOk:
         raise newSqliteError(db)
 
-proc addToCache(db: DbConn, sql: string, prepared: PreparedSql): void =
+proc addToCache(db: DbConn, sql: string, prepared: sqlite.Stmt): void =
     db.cache[sql] = prepared
     if db.cache.len > db.cacheSize:
         for k, v in db.cache:
@@ -201,7 +199,7 @@ proc `==`*(a, b: DbValue): bool =
 # PStmt
 #
 
-proc bindParams(db: DbConn, prepared: PreparedSql, params: varargs[DbValue]): Rc =
+proc bindParams(db: DbConn, prepared: sqlite.Stmt, params: varargs[DbValue]): Rc =
     result = sqlite.SQLITE_OK
     let expectedParamsLen = sqlite.bind_parameter_count(prepared) 
     if expectedParamsLen != params.len:
@@ -228,7 +226,7 @@ proc bindParams(db: DbConn, prepared: PreparedSql, params: varargs[DbValue]): Rc
             return rc
         idx.inc
 
-proc prepareSql(db: DbConn, sql: string): PreparedSql =
+proc prepareSql(db: DbConn, sql: string): sqlite.Stmt =
     var tail: cstring
     let rc = sqlite.prepare_v2(db.handle, sql.cstring, sql.len.cint, result, tail)
     db.checkRc(rc)
@@ -236,7 +234,7 @@ proc prepareSql(db: DbConn, sql: string): PreparedSql =
         "Only single SQL statement is allowed in this context. " &
         "To execute several SQL statements, use 'execScript'"
 
-proc prepareSql(db: DbConn, sql: string, params: seq[DbValue]): PreparedSql
+proc prepareSql(db: DbConn, sql: string, params: seq[DbValue]): sqlite.Stmt
         {.raises: [SqliteError].} =
     if db.cacheSize > 0:
         result = db.cache.getOrDefault(sql)
@@ -247,7 +245,7 @@ proc prepareSql(db: DbConn, sql: string, params: seq[DbValue]): PreparedSql
     let rc = db.bindParams(result, params)
     db.checkRc(rc)
 
-proc readColumn(prepared: PreparedSql, col: int32): DbValue =
+proc readColumn(prepared: sqlite.Stmt, col: int32): DbValue =
     let columnType = sqlite.column_type(prepared, col)
     case columnType
     of sqlite.SQLITE_INTEGER:
@@ -268,16 +266,16 @@ proc readColumn(prepared: PreparedSql, col: int32): DbValue =
     else:
         raiseAssert "Unexpected column type: " & $columnType
 
-iterator iterate(db: DbConn, stmtOrHandle: PreparedSql | SqlStatement, params: varargs[DbValue],
+iterator iterate(db: DbConn, stmtOrHandle: sqlite.Stmt | SqlStatement, params: varargs[DbValue],
         errorRc: var int32): ResultRow =
-    let prepared = when stmtOrHandle is PreparedSql: stmtOrHandle else: stmtOrHandle.handle
+    let prepared = when stmtOrHandle is sqlite.Stmt: stmtOrHandle else: stmtOrHandle.handle
     errorRc = db.bindParams(prepared, params)
     if errorRc in SqliteRcOk:
         var rowLen = sqlite.column_count(prepared)
         var values = newSeq[DbValue](rowLen)
         var columns = newSeq[string](rowLen)
         while true:
-            when stmtOrHandle is PreparedSql:
+            when stmtOrHandle is sqlite.Stmt:
                 assertCanUseDb db
             else:
                 assertCanUseStatement stmtOrHandle, busyOk = true
@@ -348,7 +346,7 @@ proc execScript*(db: DbConn, sql: string) =
         var remaining = sql.cstring
         while remaining.len > 0:
             var tail: cstring
-            var prepared: PreparedSql
+            var prepared: sqlite.Stmt
             var rc = sqlite.prepare_v2(db.handle, remaining, sql.len.cint, prepared, tail)
             db.checkRc(rc)
             rc = sqlite.step(prepared)
