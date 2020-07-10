@@ -610,13 +610,13 @@ proc unpack*[T: tuple](row: ResultRow, _: typedesc[T]): T =
 #
 
 proc rows*(db: DbConn, sql: string,
-        params: varargs[DbValue, toDbValue]): seq[ResultRow] {.deprecated: "use 'all' instead".} =
-    db.all(sql, params)
+        params: varargs[DbValue, toDbValue]): seq[seq[DbValue]] {.deprecated: "use 'all' instead".} =
+    db.all(sql, params).mapIt(it.values)
     
 iterator rows*(db: DbConn, sql: string,
-        params: varargs[DbValue, toDbValue]): ResultRow {.deprecated: "use 'all' instead".} =
+        params: varargs[DbValue, toDbValue]): seq[DbValue] {.deprecated: "use 'all' instead".} =
     for row in db.all(sql, params):
-        yield row
+        yield row.values
 
 proc unpack*[T: tuple](row: seq[DbValue], _: typedesc[T]): T {.deprecated.} =
-    ResultRow(values: row).unpact(T)
+    ResultRow(values: row).unpack(T)
