@@ -548,7 +548,7 @@ proc isAlive*(statement: SqlStatement): bool =
     (not SqlStatementImpl(statement).isNil) and (not statement.handle.isNil) and
         (not statement.db.handle.isNil)
 
-proc openDatabase*(path: string, mode = dbReadWrite, cacheSize: Natural = 50): DbConn =
+proc openDatabase*(path: string, mode = dbReadWrite, cacheSize: Natural = 100): DbConn =
     ## Open a new database connection to a database file. To create an
     ## in-memory database the special path `":memory:"` can be used.
     ## If the database doesn't already exist and ``mode`` is ``dbReadWrite``,
