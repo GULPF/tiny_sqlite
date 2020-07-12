@@ -1,7 +1,8 @@
 ## .. include:: ./tiny_sqlite/private/documentation.rst
 
-import std / [options, typetraits, tables, sequtils]
+import std / [options, typetraits, sequtils]
 from tiny_sqlite / sqlite_wrapper as sqlite import nil
+import tiny_sqlite / private / stmtcache
 
 when not declared(tupleLen):
     macro tupleLen(typ: typedesc[tuple]): int =
@@ -13,8 +14,7 @@ export options.get, options.isSome
 type
     DbConnImpl = ref object 
         handle: sqlite.Sqlite3 ## The underlying SQLite3 handle
-        cache: OrderedTable[string, sqlite.Stmt]
-        cacheSize: int
+        cache: StmtCache
 
     DbConn* = distinct DbConnImpl ## Encapsulates a database connection.
 
@@ -71,8 +71,9 @@ proc isOpen*(db: DbConn): bool {.noSideEffect, inline.}
 template handle(db: DbConn): sqlite.Sqlite3 = DbConnImpl(db).handle
 template handle(statement: SqlStatement): sqlite.Stmt = SqlStatementImpl(statement).handle
 template db(statement: SqlStatement): DbConn = SqlStatementImpl(statement).db
-template cache(db: DbConn): OrderedTable[string, sqlite.Stmt] = DbConnImpl(db).cache
-template cacheSize(db: DbConn): int = DbConnImpl(db).cacheSize
+template cache(db: DbConn): StmtCache = DbConnImpl(db).cache
+
+template hasCache(db: DbConn): bool = db.cache.capacity > 0
 
 template assertCanUseDb(db: DbConn) =
     doAssert (not DbConnImpl(db).isNil) and (not db.handle.isNil), "Database is closed"
@@ -97,14 +98,6 @@ proc newSqliteError(msg: string): ref SqliteError =
 template checkRc(db: DbConn, rc: Rc) =
     if rc notin SqliteRcOk:
         raise newSqliteError(db)
-
-proc addToCache(db: DbConn, sql: string, stmtHandle: sqlite.Stmt): void =
-    db.cache[sql] = stmtHandle
-    if db.cache.len > db.cacheSize:
-        for k, v in db.cache:
-            discard sqlite.finalize(v)
-            db.cache.del k
-            break
 
 #
 # DbValue
@@ -243,12 +236,13 @@ proc prepareSql(db: DbConn, sql: string): sqlite.Stmt =
 
 proc prepareSql(db: DbConn, sql: string, params: seq[DbValue]): sqlite.Stmt
         {.raises: [SqliteError].} =
-    if db.cacheSize > 0:
+    if db.hasCache:
         result = db.cache.getOrDefault(sql)
-    if result.isNil:
+        if result.isNil:
+            result = prepareSql(db, sql)
+            db.cache[sql] = result
+    else:
         result = prepareSql(db, sql)
-        if db.cacheSize > 0:
-            db.addToCache(sql, result)
     let rc = db.bindParams(result, params)
     db.checkRc(rc)
 
@@ -313,7 +307,7 @@ proc exec*(db: DbConn, sql: string, params: varargs[DbValue, toDbValue]) =
     assertCanUseDb db
     let stmtHandle = db.prepareSql(sql, @params)
     let rc = sqlite.step(stmtHandle)
-    if db.cacheSize > 0:
+    if db.hasCache:
         discard sqlite.reset(stmtHandle)
     else:
         discard sqlite.finalize(stmtHandle)
@@ -375,7 +369,7 @@ iterator iterate*(db: DbConn, sql: string,
         # The database might have been closed while iterating, in which
         # case we don't need to clean up the statement.
         if not db.handle.isNil:
-            if db.cacheSize > 0:
+            if db.hasCache:
                 discard sqlite.reset(stmtHandle)
             else:
                 discard sqlite.finalize(stmtHandle)
@@ -565,7 +559,8 @@ proc openDatabase*(path: string, mode = dbReadWrite, cacheSize: Natural = 100): 
     var handle: sqlite.Sqlite3
     let db = new DbConnImpl
     db.handle = handle
-    db.cacheSize = cacheSize
+    if cacheSize > 0:
+        db.cache = initStmtCache(cacheSize)
     result = DbConn(db)
     case mode
     of dbReadWrite:
