@@ -19,8 +19,9 @@ be created by using the special path `":memory:"` as an argument. Once the datab
 Executing SQL
 #############
 
-The `exec <#exec,DbConn,string,varargs[DbValue,toDbValue]>`_ procedure can be used to execute a single SQL statement. The `execScript <#execScript,DbConn,string>`_
-procedure is used to execute several statements, but it doesn't support parameter substitution.
+The `exec <#exec,DbConn,string,varargs[DbValue,toDbValue]>`_ procedure can be used to execute a single SQL statement.
+The `execScript <#execScript,DbConn,string>`_ procedure is used to execute several statements, but it doesn't support
+parameter substitution.
 
 .. code-block:: nim
 
@@ -50,6 +51,11 @@ Four different procedures for reading data are available:
 - `one <#one,DbConn,string,varargs[DbValue,toDbValue]>`_: procedure returning the first result row, or `none` if no result row exists
 - `value <#value,DbConn,string,varargs[DbValue,toDbValue]>`_: procedure returning the first column of the first result row, or `none` if no result row exists
 
+Note that the procedures `one` and `value` returns the result wrapped in an `Option`. See the standard library
+`options module <https://nim-lang.org/docs/options.html>`_ for documentation on how to deal with `Option` values.
+For convenience the `tiny_sqlite` module exports the `options.get` and `options.isSome` procedures so the options
+module doesn't need to be explicitly imported for typical usage.
+
 .. code-block:: nim
 
     for row in db.iterate("SELECT name, age FROM Person"):
@@ -74,8 +80,6 @@ Four different procedures for reading data are available:
     if value.isSome:
         echo fromDbValue(value.get, int) # Prints age of John Doe
 
-Note that the procedures `one` and `value` returns the result wrapped in an `Option`. See the standard library
-`options module <https://nim-lang.org/docs/options.html>`_ for documentation on how to deal with `Option` values.
 
 Inserting data in bulk
 ######################
@@ -124,10 +128,10 @@ The procedures that can execute multiple SQL statements (`execScript` and `execM
 Prepared statements
 ###################
 
-All the procedures described above operate directly on the database connection. In addition to those procedures,
-``tiny_sqlite`` also offer an API for preparing SQL statements in advance. Prepared statements are created with the
-`stmt <#stmt,DbConn,string>`_ procedure, and the same procedures for executing SQL that are available directly
-on the connection object are also available for the prepared statement:
+All the procedures for executing SQL described above creates and executes prepared statements internally. In addition to
+those procedures, ``tiny_sqlite`` also offers an API for preparing SQL statements explicitly. Prepared statements are
+created with the `stmt <#stmt,DbConn,string>`_ procedure, and the same procedures for executing SQL that are available
+directly on the connection object are also available for the prepared statement:
 
 
 .. code-block:: nim
