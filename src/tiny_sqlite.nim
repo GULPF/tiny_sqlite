@@ -1,12 +1,14 @@
 ## .. include:: ./tiny_sqlite/private/documentation.rst
 
-import std / [options, macros, typetraits, tables, sequtils]
+import std / [options, typetraits, tables, sequtils]
 from tiny_sqlite / sqlite_wrapper as sqlite import nil
 
 when not declared(tupleLen):
     macro tupleLen(typ: typedesc[tuple]): int =
         let impl = getType(typ)
         result = newIntlitNode(impl[1].len - 1)
+
+export options.get, options.isSome
 
 type
     DbConnImpl = ref object 
@@ -577,7 +579,7 @@ proc openDatabase*(path: string, mode = dbReadWrite, cacheSize: Natural = 100): 
 # ResultRow
 #
 
-proc `[]`*(row: ResultRow, idx: int): DbValue =
+proc `[]`*(row: ResultRow, idx: Natural): DbValue =
     ## Access a column in the result row based on index.
     row.values[idx]
 
@@ -585,7 +587,7 @@ proc `[]`*(row: ResultRow, column: string): DbValue =
     ## Access a column in te result row based on column name.
     ## The column name must be unambiguous.
     let idx = row.columns.find(column)
-    doAssert idx != -1, "Column does not exist in row: '" & column & "'"
+    assert idx != -1, "Column does not exist in row: '" & column & "'"
     doAssert count(row.columns, column) == 1, "Column exists multiple times in row: '" & column & "'"
     row.values[idx]
 
