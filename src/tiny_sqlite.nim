@@ -96,8 +96,8 @@ template checkRc(db: DbConn, rc: Rc) =
     if rc notin SqliteRcOk:
         raise newSqliteError(db)
 
-proc addToCache(db: DbConn, sql: string, prepared: sqlite.Stmt): void =
-    db.cache[sql] = prepared
+proc addToCache(db: DbConn, sql: string, stmtHandle: sqlite.Stmt): void =
+    db.cache[sql] = stmtHandle
     if db.cache.len > db.cacheSize:
         for k, v in db.cache:
             discard sqlite.finalize(v)
@@ -204,9 +204,9 @@ proc `==`*(a, b: DbValue): bool =
 # PStmt
 #
 
-proc bindParams(db: DbConn, prepared: sqlite.Stmt, params: varargs[DbValue]): Rc =
+proc bindParams(db: DbConn, stmtHandle: sqlite.Stmt, params: varargs[DbValue]): Rc =
     result = sqlite.SQLITE_OK
-    let expectedParamsLen = sqlite.bind_parameter_count(prepared) 
+    let expectedParamsLen = sqlite.bind_parameter_count(stmtHandle) 
     if expectedParamsLen != params.len:
         raise newSqliteError("SQL statement contains " & $expectedParamsLen &
             " parameters but only " & $params.len & " was provided.")
@@ -216,15 +216,15 @@ proc bindParams(db: DbConn, prepared: sqlite.Stmt, params: varargs[DbValue]): Rc
         let rc =
             case value.kind
             of sqliteNull:
-                sqlite.bind_null(prepared, idx)
+                sqlite.bind_null(stmtHandle, idx)
             of sqliteInteger:
-                sqlite.bind_int64(prepared, idx, value.intval)
+                sqlite.bind_int64(stmtHandle, idx, value.intval)
             of sqliteReal:
-                sqlite.bind_double(prepared, idx, value.floatVal)
+                sqlite.bind_double(stmtHandle, idx, value.floatVal)
             of sqliteText:   
-                sqlite.bind_text(prepared, idx, value.strVal.cstring, value.strVal.len.int32, sqlite.SQLITE_TRANSIENT)
+                sqlite.bind_text(stmtHandle, idx, value.strVal.cstring, value.strVal.len.int32, sqlite.SQLITE_TRANSIENT)
             of sqliteBlob:
-                sqlite.bind_blob(prepared, idx.int32, cast[string](value.blobVal).cstring,
+                sqlite.bind_blob(stmtHandle, idx.int32, cast[string](value.blobVal).cstring,
                     value.blobVal.len.int32, sqlite.SQLITE_TRANSIENT)
 
         if rc notin SqliteRcOk:
@@ -250,18 +250,18 @@ proc prepareSql(db: DbConn, sql: string, params: seq[DbValue]): sqlite.Stmt
     let rc = db.bindParams(result, params)
     db.checkRc(rc)
 
-proc readColumn(prepared: sqlite.Stmt, col: int32): DbValue =
-    let columnType = sqlite.column_type(prepared, col)
+proc readColumn(stmtHandle: sqlite.Stmt, col: int32): DbValue =
+    let columnType = sqlite.column_type(stmtHandle, col)
     case columnType
     of sqlite.SQLITE_INTEGER:
-        result = toDbValue(sqlite.column_int64(prepared, col))
+        result = toDbValue(sqlite.column_int64(stmtHandle, col))
     of sqlite.SQLITE_FLOAT:
-        result = toDbValue(sqlite.column_double(prepared, col))
+        result = toDbValue(sqlite.column_double(stmtHandle, col))
     of sqlite.SQLITE_TEXT:
-        result = toDbValue($sqlite.column_text(prepared, col))
+        result = toDbValue($sqlite.column_text(stmtHandle, col))
     of sqlite.SQLITE_BLOB:
-        let blob = sqlite.column_blob(prepared, col)
-        let bytes = sqlite.column_bytes(prepared, col)
+        let blob = sqlite.column_blob(stmtHandle, col)
+        let bytes = sqlite.column_bytes(stmtHandle, col)
         var s = newSeq[byte](bytes)
         if bytes != 0:
             copyMem(addr(s[0]), blob, bytes)
@@ -273,23 +273,24 @@ proc readColumn(prepared: sqlite.Stmt, col: int32): DbValue =
 
 iterator iterate(db: DbConn, stmtOrHandle: sqlite.Stmt | SqlStatement, params: varargs[DbValue],
         errorRc: var int32): ResultRow =
-    let prepared = when stmtOrHandle is sqlite.Stmt: stmtOrHandle else: stmtOrHandle.handle
-    errorRc = db.bindParams(prepared, params)
+    let stmtHandle = when stmtOrHandle is sqlite.Stmt: stmtOrHandle else: stmtOrHandle.handle
+    errorRc = db.bindParams(stmtHandle, params)
     if errorRc in SqliteRcOk:
-        var rowLen = sqlite.column_count(prepared)
-        var values = newSeq[DbValue](rowLen)
+        var rowLen = sqlite.column_count(stmtHandle)
         var columns = newSeq[string](rowLen)
+        for idx in 0 ..< rowLen:
+            columns[idx] = $sqlite.column_name(stmtHandle, idx)
         while true:
+            var row = ResultRow(values: newSeq[DbValue](rowLen), columns: columns)
             when stmtOrHandle is sqlite.Stmt:
                 assertCanUseDb db
             else:
                 assertCanUseStatement stmtOrHandle, busyOk = true
-            let rc = sqlite.step(prepared)
+            let rc = sqlite.step(stmtHandle)
             if rc == sqlite.SQLITE_ROW:
                 for idx in 0 ..< rowLen:
-                    values[idx] = readColumn(prepared, idx)
-                    columns[idx] = $sqlite.column_name(prepared, idx)
-                yield ResultRow(values: values, columns: columns)
+                    row.values[idx] = readColumn(stmtHandle, idx)
+                yield row
             elif rc == sqlite.SQLITE_DONE:
                 break
             else:
@@ -308,12 +309,12 @@ proc exec*(db: DbConn, sql: string, params: varargs[DbValue, toDbValue]) =
         db.exec("INSERT INTO Person(name, age) VALUES(?, ?)",
             "John Doe", 23)
     assertCanUseDb db
-    let prepared = db.prepareSql(sql, @params)
-    let rc = sqlite.step(prepared)
+    let stmtHandle = db.prepareSql(sql, @params)
+    let rc = sqlite.step(stmtHandle)
     if db.cacheSize > 0:
-        discard sqlite.reset(prepared)
+        discard sqlite.reset(stmtHandle)
     else:
-        discard sqlite.finalize(prepared)
+        discard sqlite.finalize(stmtHandle)
     db.checkRc(rc)
 
 template transaction*(db: DbConn, body: untyped) =
@@ -351,11 +352,11 @@ proc execScript*(db: DbConn, sql: string) =
         var remaining = sql.cstring
         while remaining.len > 0:
             var tail: cstring
-            var prepared: sqlite.Stmt
-            var rc = sqlite.prepare_v2(db.handle, remaining, sql.len.cint, prepared, tail)
+            var stmtHandle: sqlite.Stmt
+            var rc = sqlite.prepare_v2(db.handle, remaining, sql.len.cint, stmtHandle, tail)
             db.checkRc(rc)
-            rc = sqlite.step(prepared)
-            discard sqlite.finalize(prepared)
+            rc = sqlite.step(stmtHandle)
+            discard sqlite.finalize(stmtHandle)
             db.checkRc(rc)
             remaining = tail
 
@@ -363,19 +364,19 @@ iterator iterate*(db: DbConn, sql: string,
         params: varargs[DbValue, toDbValue]): ResultRow =
     ## Executes ``sql``, which must be a single SQL statement, and yields each result row one by one.
     assertCanUseDb db
-    let prepared = db.prepareSql(sql, @params)
+    let stmtHandle = db.prepareSql(sql, @params)
     var errorRc: int32
     try:
-        for row in db.iterate(prepared, params, errorRc):
+        for row in db.iterate(stmtHandle, params, errorRc):
             yield row
     finally:
         # The database might have been closed while iterating, in which
         # case we don't need to clean up the statement.
         if not db.handle.isNil:
             if db.cacheSize > 0:
-                discard sqlite.reset(prepared)
+                discard sqlite.reset(stmtHandle)
             else:
-                discard sqlite.finalize(prepared)
+                discard sqlite.finalize(stmtHandle)
         db.checkRc(errorRc)
 
 proc all*(db: DbConn, sql: string,
@@ -403,10 +404,10 @@ proc close*(db: DbConn) =
     ## to avoid leaking memory. Closing an already closed database is a harmless no-op.
     if not db.isOpen:
         return
-    var prepared = sqlite.next_stmt(db.handle, nil)
-    while not prepared.isNil:
-        discard sqlite.finalize(prepared)
-        prepared = sqlite.next_stmt(db.handle, nil)
+    var stmtHandle = sqlite.next_stmt(db.handle, nil)
+    while not stmtHandle.isNil:
+        discard sqlite.finalize(stmtHandle)
+        stmtHandle = sqlite.next_stmt(db.handle, nil)
     db.cache.clear()
     let rc = sqlite.close(db.handle)
     db.checkRc(rc)
@@ -614,12 +615,12 @@ proc unpack*[T: tuple](row: ResultRow, _: typedesc[T]): T =
 # Deprecations
 #
 
-proc rows*(db: DbConn, sql: string,
-        params: varargs[DbValue, toDbValue]): seq[seq[DbValue]] {.deprecated: "use 'all' instead".} =
+proc rows*(db: DbConn, sql: string, params: varargs[DbValue, toDbValue]): seq[seq[DbValue]]
+        {.deprecated: "use 'all' instead".} =
     db.all(sql, params).mapIt(it.values)
     
-iterator rows*(db: DbConn, sql: string,
-        params: varargs[DbValue, toDbValue]): seq[DbValue] {.deprecated: "use 'all' instead".} =
+iterator rows*(db: DbConn, sql: string, params: varargs[DbValue, toDbValue]): seq[DbValue]
+        {.deprecated: "use 'iterate' instead".} =
     for row in db.all(sql, params):
         yield row.values
 
