@@ -4,7 +4,7 @@ import std / [options, macros, typetraits, tables, sequtils]
 from tiny_sqlite / sqlite_wrapper as sqlite import nil
 
 type
-    DbConnImpl = ref object 
+    DbConnImpl = ref object
         handle: sqlite.Sqlite3 ## The underlying SQLite3 handle
         cache: OrderedTable[string, sqlite.Stmt]
         cacheSize: int
@@ -133,7 +133,7 @@ proc toDbValue*[T: type(nil)](val: T): DbValue =
 proc toDbValues*(values: varargs[DbValue, toDbValue]): seq[DbValue] =
     ## Convert several values to a sequence of DbValue's.
     runnableExamples:
-        doAssert toDbValues("string", 23) == @[toDbValue("string"), toDbValue(23)] 
+        doAssert toDbValues("string", 23) == @[toDbValue("string"), toDbValue(23)]
     @values
 
 proc fromDbValue*(value: DbValue, T: typedesc[Ordinal]): T =
@@ -164,9 +164,9 @@ proc fromDbValue*(value: DbValue, T: typedesc[DbValue]): T =
     ## The purpose of this overload is to do partial unpacking.
     ## For example, if the type of one column in a result row is unknown,
     ## the DbValue type can be kept just for that column.
-    ## 
+    ##
     ## .. code-block:: nim
-    ## 
+    ##
     ##   for row in db.iterate("SELECT name, extra FROM Person"):
     ##       # Type of 'extra' is unknown, so we don't unpack it.
     ##       # The 'extra' variable will be of type 'DbValue'
@@ -201,7 +201,7 @@ proc `==`*(a, b: DbValue): bool =
 
 proc bindParams(db: DbConn, prepared: sqlite.Stmt, params: varargs[DbValue]): Rc =
     result = sqlite.SQLITE_OK
-    let expectedParamsLen = sqlite.bind_parameter_count(prepared) 
+    let expectedParamsLen = sqlite.bind_parameter_count(prepared)
     if expectedParamsLen != params.len:
         raise newSqliteError("SQL statement contains " & $expectedParamsLen &
             " parameters but only " & $params.len & " was provided.")
@@ -216,7 +216,7 @@ proc bindParams(db: DbConn, prepared: sqlite.Stmt, params: varargs[DbValue]): Rc
                 sqlite.bind_int64(prepared, idx, value.intval)
             of sqliteReal:
                 sqlite.bind_double(prepared, idx, value.floatVal)
-            of sqliteText:   
+            of sqliteText:
                 sqlite.bind_text(prepared, idx, value.strVal.cstring, value.strVal.len.int32, sqlite.SQLITE_TRANSIENT)
             of sqliteBlob:
                 sqlite.bind_blob(prepared, idx.int32, cast[string](value.blobVal).cstring,
@@ -473,7 +473,7 @@ proc stmt*(db: DbConn, sql: string): SqlStatement =
     assertCanUseDb db
     let handle = prepareSql(db, sql)
     SqlStatementImpl(handle: handle, db: db).SqlStatement
-    
+
 proc exec*(statement: SqlStatement, params: varargs[DbValue, toDbValue]) =
     ## Executes `statement` with `params` as parameters.
     assertCanUseStatement statement
@@ -524,7 +524,7 @@ proc one*(statement: SqlStatement,
 
 proc value*(statement: SqlStatement,
         params: varargs[DbValue, toDbValue]): Option[DbValue] =
-    ## Executes `statement` and returns the first column of the first row found. 
+    ## Executes `statement` and returns the first column of the first row found.
     ## Returns `none(DbValue)` if no result was found.
     assertCanUseStatement statement
     for row in statement.iterate(params):
@@ -598,8 +598,9 @@ proc columns*(row: ResultRow): seq[string] =
 proc unpack*[T: tuple](row: ResultRow, _: typedesc[T]): T =
     ## Calls ``fromDbValue`` on each element of ``row`` and returns it
     ## as a tuple.
-    doAssert row.len == result.tupleLen,
-        "Unpack expected a tuple with " & $row.len & " field(s) but found: " & $T
+    when (NimMajor, NimMinor) >= (1, 1):
+      doAssert row.len == result.tupleLen,
+          "Unpack expected a tuple with " & $row.len & " field(s) but found: " & $T
     var idx = 0
     for value in result.fields:
         value = row[idx].fromDbValue(type(value))
@@ -612,7 +613,7 @@ proc unpack*[T: tuple](row: ResultRow, _: typedesc[T]): T =
 proc rows*(db: DbConn, sql: string,
         params: varargs[DbValue, toDbValue]): seq[seq[DbValue]] {.deprecated: "use 'all' instead".} =
     db.all(sql, params).mapIt(it.values)
-    
+
 iterator rows*(db: DbConn, sql: string,
         params: varargs[DbValue, toDbValue]): seq[DbValue] {.deprecated: "use 'all' instead".} =
     for row in db.all(sql, params):
