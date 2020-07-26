@@ -3,6 +3,11 @@
 import std / [options, macros, typetraits, tables, sequtils]
 from tiny_sqlite / sqlite_wrapper as sqlite import nil
 
+when not declared(tupleLen):
+    macro tupleLen(typ: typedesc[tuple]): int =
+        let impl = getType(typ)
+        result = newIntlitNode(impl[1].len - 1)
+
 type
     DbConnImpl = ref object 
         handle: sqlite.Sqlite3 ## The underlying SQLite3 handle
@@ -598,7 +603,7 @@ proc columns*(row: ResultRow): seq[string] =
 proc unpack*[T: tuple](row: ResultRow, _: typedesc[T]): T =
     ## Calls ``fromDbValue`` on each element of ``row`` and returns it
     ## as a tuple.
-    doAssert row.len == result.tupleLen,
+    doAssert row.len == result.typeof.tupleLen,
         "Unpack expected a tuple with " & $row.len & " field(s) but found: " & $T
     var idx = 0
     for value in result.fields:
