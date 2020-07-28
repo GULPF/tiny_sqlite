@@ -9,7 +9,7 @@ when not declared(tupleLen):
         let impl = getType(typ)
         result = newIntlitNode(impl[1].len - 1)
 
-export options.get, options.isSome
+export options.get, options.isSome, options.isNone
 
 type
     DbConnImpl = ref object 

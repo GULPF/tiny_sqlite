@@ -53,7 +53,7 @@ Four different procedures for reading data are available:
 
 Note that the procedures `one` and `value` returns the result wrapped in an `Option`. See the standard library
 `options module <https://nim-lang.org/docs/options.html>`_ for documentation on how to deal with `Option` values.
-For convenience the `tiny_sqlite` module exports the `options.get` and `options.isSome` procedures so the options
+For convenience the `tiny_sqlite` module exports the `options.get`, `options.isSome`, and `options.isNone` procedures so the options
 module doesn't need to be explicitly imported for typical usage.
 
 .. code-block:: nim
