@@ -89,7 +89,7 @@ template assertCanUseStatement(statement: SqlStatement, busyOk: static[bool] = f
 
 proc newSqliteError(db: DbConn): ref SqliteError =
     ## Raises a SqliteError exception.
-    (ref SqliteError)(msg: $sqlite.errmsg(db.handle))
+    (ref SqliteError)(msg: "sqlite error: " & $sqlite.errmsg(db.handle))
 
 proc newSqliteError(msg: string): ref SqliteError =
     ## Raises a SqliteError exception.
@@ -98,6 +98,40 @@ proc newSqliteError(msg: string): ref SqliteError =
 template checkRc(db: DbConn, rc: Rc) =
     if rc notin SqliteRcOk:
         raise newSqliteError(db)
+
+proc skipLeadingWhiteSpaceAndComments(sql: var cstring) =
+    let original = sql
+
+    template `&+`(s: cstring, offset: int): cstring =
+        cast[cstring](cast[ByteAddress](sql) + offset)
+
+    while true:
+        case sql[0]
+        of {' ', '\t', '\v', '\r', '\l', '\f'}:
+            sql = sql &+ 1
+        of '-':
+            if sql[1] == '-':
+                sql = sql &+ 2
+                while sql[0] != '\n':
+                    sql = sql &+ 1
+                    if sql[0] == '\0':
+                        return
+                sql = sql &+ 1
+            else:
+                return;
+        of '/':
+            if sql[1] == '*':
+                sql = sql &+ 2
+                while sql[0] != '*' or sql[1] != '/':
+                    sql = sql &+ 1
+                    if sql[0] == '\0':
+                        sql = original
+                        return
+                sql = sql &+ 2
+            else:
+                return;
+        else:
+            return
 
 #
 # DbValue
@@ -228,8 +262,9 @@ proc bindParams(db: DbConn, stmtHandle: sqlite.Stmt, params: varargs[DbValue]): 
 
 proc prepareSql(db: DbConn, sql: string): sqlite.Stmt =
     var tail: cstring
-    let rc = sqlite.prepare_v2(db.handle, sql.cstring, sql.len.cint, result, tail)
+    let rc = sqlite.prepare_v2(db.handle, sql.cstring, sql.len.cint + 1, result, tail)
     db.checkRc(rc)
+    tail.skipLeadingWhiteSpaceAndComments()
     assert tail.len == 0,
         "Only single SQL statement is allowed in this context. " &
         "To execute several SQL statements, use 'execScript'"
@@ -349,12 +384,13 @@ proc execScript*(db: DbConn, sql: string) =
         while remaining.len > 0:
             var tail: cstring
             var stmtHandle: sqlite.Stmt
-            var rc = sqlite.prepare_v2(db.handle, remaining, sql.len.cint, stmtHandle, tail)
+            var rc = sqlite.prepare_v2(db.handle, remaining, -1, stmtHandle, tail)
             db.checkRc(rc)
             rc = sqlite.step(stmtHandle)
             discard sqlite.finalize(stmtHandle)
             db.checkRc(rc)
             remaining = tail
+            remaining.skipLeadingWhiteSpaceAndComments()
 
 iterator iterate*(db: DbConn, sql: string,
         params: varargs[DbValue, toDbValue]): ResultRow =

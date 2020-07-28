@@ -71,6 +71,43 @@ test "db.exec":
         db.exec("DELETE FROM Person WHERE name = ?", "John Persson")
         check db.all(SelectPersons).len == 2
 
+test "db.exec trailing comment":
+    withDb:
+        db.exec("""
+            INSERT INTO Person(name, age)
+            VALUES(?, ?);
+            -- comment
+            /*
+            comment
+            */
+        """, "John Persson", 103)
+        check db.changes == 1
+        let rows = db.all(SelectPersons)
+        check rows.len == 3
+        db.exec("DELETE FROM Person WHERE name = ?", "John Persson")
+        check db.all(SelectPersons).len == 2
+
+test "db.exec trailing syntax error":
+    withDb:
+        expect AssertionError:
+            db.exec("""
+                INSERT INTO Person(name, age)
+                VALUES(?, ?);
+                /*
+                comment
+                *
+            """, "John Persson", 103)
+
+test "db.exec with multiple SQL statements":
+    withDb:
+        expect AssertionError:
+            db.exec("""
+                INSERT INTO Person(name, age)
+                VALUES(?, ?);
+                INSERT INTO Person(name, age)
+                VALUES(?, ?);
+            """, "John Persson", 103, "John Persson", 103)
+
 test "db.execMany":
     withDb:
         db.execMany("""
@@ -100,21 +137,34 @@ test "db.execMany in transaction":
             let rows = db.all(SelectPersons)
             check rows.len == 4
 
-test "db.execScript with failure":
+test "db.execScript trailing comment":
     withDb:
-        expect SqliteError:
-            db.execScript("""
-                INSERT
-                    INSERT INTO Person(name, age)
-                    VALUES('John Persson', 23);
-
-                    INSERT INTO Wrong(field)
-                    VALUES(10);
-            """)
+        db.execScript("""
+            INSERT INTO Person(name, age)
+            VALUES('John Persson', 23);
+            INSERT INTO Person(name, age)
+            VALUES('John Persson', 23);
+            -- comment
+            /*
+            comment
+            */
+        """)
         let rows = db.all(SelectPersons)
-        check rows.len == 2
+        check rows.len == 4
 
 test "db.execScript in transaction":
+    withDb:
+        db.transaction:
+            db.execScript("""
+                INSERT INTO Person(name, age)
+                VALUES('John Persson', 23);
+                INSERT INTO Person(name, age)
+                VALUES('John Persson', 23);
+            """)
+            let rows = db.all(SelectPersons)
+            check rows.len == 4
+
+test "db.execScript with failure":
     withDb:
         expect SqliteError:
             db.execScript("""
