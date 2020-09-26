@@ -128,7 +128,7 @@ The procedures that can execute multiple SQL statements (`execScript` and `execM
 Prepared statements
 ###################
 
-All the procedures for executing SQL described above creates and executes prepared statements internally. In addition to
+All the procedures for executing SQL described above create and execute prepared statements internally. In addition to
 those procedures, ``tiny_sqlite`` also offers an API for preparing SQL statements explicitly. Prepared statements are
 created with the `stmt <#stmt,DbConn,string>`_ procedure, and the same procedures for executing SQL that are available
 directly on the connection object are also available for the prepared statement:
