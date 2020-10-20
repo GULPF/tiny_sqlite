@@ -2,7 +2,7 @@
 
 `tiny_sqlite` is a comparatively thin wrapper for the SQLite database library. It differs from the standard library module `std/db_sqlite` in several ways:
 
-- `tiny_sqlite` represents database values with a type safe case object called `DbValue` instead of treating every value as a string, which among other things means that SQLite `NULL` values can be properly supported.
+- `tiny_sqlite` represents database values with a typesafe case object called `DbValue` instead of treating every value as a string, which among other things means that SQLite `NULL` values can be properly supported.
 
 - `tiny_sqlite` is not designed as a generic database API, only SQLite will ever be supported. The database modules in the standard library are built with replaceability in mind so that the code might work with several different database engines just by replacing an import. This is not the case for `tiny_sqlite`.
 
