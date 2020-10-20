@@ -5,6 +5,7 @@ from tiny_sqlite / sqlite_wrapper as sqlite import nil
 import tiny_sqlite / private / stmtcache
 
 when not declared(tupleLen):
+    import macros
     macro tupleLen(typ: typedesc[tuple]): int =
         let impl = getType(typ)
         result = newIntlitNode(impl[1].len - 1)
