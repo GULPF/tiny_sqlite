@@ -162,8 +162,8 @@ type they are mapped to:
 Nim type              SQLite type
 ====================  =================================================================================
 ``Ordinal``           | ``INTEGER``
-``SomeFloat``         | ``TEXT``
-``string``            | ``REAL``
+``SomeFloat``         | ``REAL``
+``string``            | ``TEXT``
 ``seq[byte]``         | ``BLOB``
 ``Option[T]``         | ``NULL`` if value is ``none(T)``, otherwise the type that ``T`` would use
 ====================  =================================================================================
