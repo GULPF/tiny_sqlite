@@ -157,6 +157,12 @@ proc open_v2*(filename: cstring, db: var Sqlite3, flags: cint, zVfsName: cstring
 proc enable_load_extension*(db: Sqlite3, onoff: cint): cint
     {.cdecl, dynlib: Lib, importc: "sqlite3_enable_load_extension".}
 
+proc load_extension*(db: Sqlite3, filename: cstring, entry: cstring, error: ptr cstring): cint
+    {.cdecl, dynlib: Lib, importc: "sqlite3_load_extension".}
+
+proc free*(z: cstring)
+    {.cdecl, dynlib: Lib, importc: "sqlite3_free".}
+
 proc errcode*(db: Sqlite3): cint
     {.cdecl, dynlib: Lib, importc: "sqlite3_errcode".}
 

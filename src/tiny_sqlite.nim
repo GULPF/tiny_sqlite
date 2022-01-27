@@ -607,6 +607,21 @@ proc openDatabase*(path: string, mode = dbReadWrite, cacheSize: Natural = 100): 
         let rc = sqlite.open_v2(path, db.handle, sqlite.SQLITE_OPEN_READONLY, nil)
         result.checkRc(rc)
 
+proc loadExtension*(db: DbConn, path: string) =
+    var
+      errp: ptr cstring
+      err: cstring
+    db.checkRc sqlite.enable_load_extension(db.handle, true.cint)
+    if sqlite.SQLITE_ERROR == sqlite.load_extension(db.handle, path.cstring, nil, errp):
+      if errp == nil:
+        # Seems to fail like this when can't find specified extension.
+        raise newSqliteError("Unable to load extension.")
+      else:
+        err = errp[]
+        sqlite.free errp[]
+        raise newSqliteError("Unable to load extension: " & $err)
+    db.checkRc sqlite.enable_load_extension(db.handle, false.cint)
+
 #
 # ResultRow
 #
