@@ -1,6 +1,6 @@
 # Package
 
-version       = "0.1.2"
+version       = "0.1.3"
 author        = "Oscar Nihlgård"
 description   = "A thin SQLite wrapper"
 license       = "MIT"
