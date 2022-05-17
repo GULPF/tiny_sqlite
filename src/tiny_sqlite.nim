@@ -609,6 +609,18 @@ proc openDatabase*(path: string, mode = dbReadWrite, cacheSize: Natural = 100): 
     result.exec("PRAGMA encoding = 'UTF-8'")
     result.exec("PRAGMA foreign_keys = ON")
 
+proc loadExtension*(db: DbConn, path: string) =
+    ## Load an SQLite extension. Will raise a ``SqliteError`` exception if loading fails.
+    db.checkRc sqlite.db_config(db.handle, sqlite.SQLITE_DBCONFIG_ENABLE_LOAD_EXTENSION, 1, 0);
+    var err: cstring
+    if sqlite.SQLITE_ERROR == sqlite.load_extension(db.handle, path.cstring, nil, err):
+      if err == nil:
+        raise newSqliteError("Unable to load extension.")
+      else:
+        let msg = $err
+        sqlite.free err
+        raise newSqliteError(msg)
+
 #
 # ResultRow
 #
@@ -618,7 +630,7 @@ proc `[]`*(row: ResultRow, idx: Natural): DbValue =
     row.values[idx]
 
 proc `[]`*(row: ResultRow, column: string): DbValue =
-    ## Access a column in te result row based on column name.
+    ## Access a column in the result row based on column name.
     ## The column name must be unambiguous.
     let idx = row.columns.find(column)
     assert idx != -1, "Column does not exist in row: '" & column & "'"

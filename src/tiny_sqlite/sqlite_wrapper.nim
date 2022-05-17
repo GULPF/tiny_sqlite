@@ -125,6 +125,27 @@ const
   SQLITE_STATIC* = nil
   SQLITE_TRANSIENT* = cast[SqliteDestructor](-1)
 
+const
+    SQLITE_DBCONFIG_MAINDBNAME* =            1000.cint
+    SQLITE_DBCONFIG_LOOKASIDE* =             1001.cint
+    SQLITE_DBCONFIG_ENABLE_FKEY* =           1002.cint
+    SQLITE_DBCONFIG_ENABLE_TRIGGER* =        1003.cint
+    SQLITE_DBCONFIG_ENABLE_FTS3_TOKENIZER* = 1004.cint
+    SQLITE_DBCONFIG_ENABLE_LOAD_EXTENSION* = 1005.cint
+    SQLITE_DBCONFIG_NO_CKPT_ON_CLOSE* =      1006.cint
+    SQLITE_DBCONFIG_ENABLE_QPSG* =           1007.cint
+    SQLITE_DBCONFIG_TRIGGER_EQP* =           1008.cint
+    SQLITE_DBCONFIG_RESET_DATABASE* =        1009.cint
+    SQLITE_DBCONFIG_DEFENSIVE* =             1010.cint
+    SQLITE_DBCONFIG_WRITABLE_SCHEMA* =       1011.cint
+    SQLITE_DBCONFIG_LEGACY_ALTER_TABLE* =    1012.cint
+    SQLITE_DBCONFIG_DQS_DML* =               1013.cint
+    SQLITE_DBCONFIG_DQS_DDL* =               1014.cint
+    SQLITE_DBCONFIG_ENABLE_VIEW* =           1015.cint
+    SQLITE_DBCONFIG_LEGACY_FILE_FORMAT* =    1016.cint
+    SQLITE_DBCONFIG_TRUSTED_SCHEMA* =        1017.cint
+    SQLITE_DBCONFIG_MAX* =                   1017.cint
+
 proc close*(db: Sqlite3): cint
     {.cdecl, dynlib: Lib, importc: "sqlite3_close".}
 
@@ -261,3 +282,12 @@ proc next_stmt*(db: Sqlite3, stmt: Stmt): Stmt
 
 proc stmt_busy*(stmt: Stmt): bool
     {.cdecl, dynlib: Lib, importc: "sqlite3_stmt_busy".}
+
+proc db_config*(db: Sqlite3, op: cint, a, b: cint): cint
+    {.cdecl, dynlib: Lib, importc: "sqlite3_db_config".}
+
+proc load_extension*(db: Sqlite3, filename: cstring, entry: cstring, error: var cstring): cint
+    {.cdecl, dynlib: Lib, importc: "sqlite3_load_extension".}
+
+proc free*(z: cstring)
+    {.cdecl, dynlib: Lib, importc: "sqlite3_free".}

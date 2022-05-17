@@ -251,6 +251,11 @@ test "db.close default value":
     var db: DbConn
     db.close()
 
+test "db.loadExtension":
+    withDb:
+        expect SqliteError:
+            db.loadExtension("invalid extension path")
+
 test "row.unpack":
     withDb:
         let row = db.one(SelectJohnDoe).get
@@ -395,7 +400,7 @@ test "Custom type mapping":
         check row.isSome
         let (timestamp,) = row.get.unpack((Time,))
         check timestamp == fromUnix(12)
-        
+
 test "Foreign keys":
     withDb:
         db.exec("""
