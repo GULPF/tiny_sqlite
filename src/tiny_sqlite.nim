@@ -606,6 +606,8 @@ proc openDatabase*(path: string, mode = dbReadWrite, cacheSize: Natural = 100): 
     of dbRead:
         let rc = sqlite.open_v2(path, db.handle, sqlite.SQLITE_OPEN_READONLY, nil)
         result.checkRc(rc)
+    result.exec("PRAGMA encoding = 'UTF-8'")
+    result.exec("PRAGMA foreign_keys = ON")
 
 #
 # ResultRow

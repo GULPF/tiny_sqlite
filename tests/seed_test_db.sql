@@ -1,4 +1,5 @@
 CREATE TABLE Person(
+    id INTEGER PRIMARY KEY,
     name TEXT,
     age INTEGER
 );

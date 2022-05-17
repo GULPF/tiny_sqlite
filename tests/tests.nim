@@ -396,3 +396,17 @@ test "Custom type mapping":
         let (timestamp,) = row.get.unpack((Time,))
         check timestamp == fromUnix(12)
         
+test "Foreign keys":
+    withDb:
+        db.exec("""
+            CREATE TABLE ForeignKey(
+                id INTEGER,
+                personId INTEGER,
+                FOREIGN KEY(personId) REFERENCES Person(id)
+            );
+        """)
+        db.exec("PRAGMA foreign_keys = ON;")
+        db.exec("INSERT INTO ForeignKey(personId) VALUES(NULL)")
+        db.exec("INSERT INTO ForeignKey(personId) VALUES(1)")
+        expect SqliteError:
+            db.exec("INSERT INTO ForeignKey(personId) VALUES(100)")
