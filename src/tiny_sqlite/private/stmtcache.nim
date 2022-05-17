@@ -19,7 +19,7 @@ proc initStmtCache*(capacity: Natural): StmtCache =
   StmtCache(
     capacity: capacity,
     list: initDoublyLinkedList[Node](),
-    table: initTable[string, DoublyLinkedNode[Node]](rightSize(capacity))
+    table: initTable[string, DoublyLinkedNode[Node]](capacity)
   )
 
 proc resize(cache: var StmtCache) =

@@ -40,7 +40,7 @@ test "db.all with break":
 
 test "db.iterate close":
     withDb:
-        expect AssertionError:
+        expect AssertionDefect:
             for row in db.iterate(SelectPersons):
                 db.close()
 
@@ -89,7 +89,7 @@ test "db.exec trailing comment":
 
 test "db.exec trailing syntax error":
     withDb:
-        expect AssertionError:
+        expect AssertionDefect:
             db.exec("""
                 INSERT INTO Person(name, age)
                 VALUES(?, ?);
@@ -100,7 +100,7 @@ test "db.exec trailing syntax error":
 
 test "db.exec with multiple SQL statements":
     withDb:
-        expect AssertionError:
+        expect AssertionDefect:
             db.exec("""
                 INSERT INTO Person(name, age)
                 VALUES(?, ?);
@@ -219,13 +219,13 @@ test "db.isInTransaction":
 test "db.isOpen":
     var db: DbConn
     check not db.isOpen
-    expect AssertionError:
+    expect AssertionDefect:
         discard db.all(SelectPersons)
     db = openDatabase(":memory:")
     check db.isOpen
     db.close()
     check not db.isOpen
-    expect AssertionError:
+    expect AssertionDefect:
         discard db.all(SelectPersons)
 
 test "db.isReadonly":
@@ -256,7 +256,7 @@ test "row.unpack":
         let row = db.one(SelectJohnDoe).get
         let (name, age) = row.unpack((string, int))
         check (name, age) == ("John Doe", 47)
-        expect AssertionError:
+        expect AssertionDefect:
             discard row.unpack(tuple[name: string])
 
 test "stmt.all":
@@ -288,24 +288,24 @@ test "stmt.iterate busy":
     withDb:
         let stmt = db.stmt(SelectPersons)
         for row in stmt.iterate():
-            expect AssertionError:
+            expect AssertionDefect:
                 discard stmt.all()
-            expect AssertionError:
+            expect AssertionDefect:
                 discard stmt.one()
-            expect AssertionError:
+            expect AssertionDefect:
                 discard stmt.value()
-            expect AssertionError:
+            expect AssertionDefect:
                 stmt.exec()
 
 test "stmt.iterate close/finalize":
     withDb:
         let stmt = db.stmt(SelectPersons)
-        expect AssertionError:
+        expect AssertionDefect:
             for row in stmt.iterate():
                 db.close()
     withDb:
         let stmt = db.stmt(SelectPersons)
-        expect AssertionError:
+        expect AssertionDefect:
             for row in stmt.iterate():
                 stmt.finalize()
 
@@ -313,13 +313,13 @@ test "stmt.isAlive":
     withDb:
         var stmt: SqlStatement
         check not stmt.isAlive
-        expect AssertionError:
+        expect AssertionDefect:
             discard stmt.all()
         stmt = db.stmt(SelectPersons)
         check stmt.isAlive
         stmt.finalize()
         check not stmt.isAlive
-        expect AssertionError:
+        expect AssertionDefect:
             discard stmt.all()
 
 test "stmt.finalize twice":
@@ -350,7 +350,7 @@ test "ResultRow":
     withDb:
         let row = db.one("SELECT a.name, b.name FROM Person a JOIN Person b").get
         check row.columns == @["name", "name"]
-        expect AssertionError:
+        expect AssertionDefect:
             discard row["name"]
 
 test "SqliteError":
