@@ -32,10 +32,18 @@ jobs:
     # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
     - uses: actions/checkout@v2
 
+    - name: Cache nimble
+      id: cache-nimble
+      uses: actions/cache@v1
+      with:
+        path: ~/.nimble
+        key: ${{ runner.os }}-nimble-${{ hashFiles('*.nimble') }}
+      if: runner.os != 'Windows'
+
     - name: Setup Nim environment
       uses: jiro4989/setup-nim-action@v1.3.49
       with:
         nim-version: ${{ matrix.nim }}
 
     - run: nimble test -Y
-    - run: nimble install
+    - run: nimble install -Y
