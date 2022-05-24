@@ -251,10 +251,11 @@ test "db.close default value":
     var db: DbConn
     db.close()
 
-test "db.loadExtension":
-    withDb:
-        expect SqliteError:
-            db.loadExtension("invalid extension path")
+when not defined(macosx):
+    test "db.loadExtension":
+        withDb:
+            expect SqliteError:
+                db.loadExtension("invalid extension path")
 
 test "row.unpack":
     withDb:

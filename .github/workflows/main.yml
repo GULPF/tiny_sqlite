@@ -19,8 +19,13 @@ jobs:
 
     strategy:
       matrix:
-        nim: [ 'devel', 'stable' ]
-        os: [ 'ubuntu-latest' ]
+        nim: [ devel, stable ]
+        os: [ ubuntu-latest ]
+        include:
+          - os: windows-latest
+            nim: stable
+          - os: macos-latest
+            nim: stable
 
     # Steps represent a sequence of tasks that will be executed as part of the job
     steps:

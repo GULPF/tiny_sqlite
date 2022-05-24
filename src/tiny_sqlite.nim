@@ -609,17 +609,18 @@ proc openDatabase*(path: string, mode = dbReadWrite, cacheSize: Natural = 100): 
     result.exec("PRAGMA encoding = 'UTF-8'")
     result.exec("PRAGMA foreign_keys = ON")
 
-proc loadExtension*(db: DbConn, path: string) =
-    ## Load an SQLite extension. Will raise a ``SqliteError`` exception if loading fails.
-    db.checkRc sqlite.db_config(db.handle, sqlite.SQLITE_DBCONFIG_ENABLE_LOAD_EXTENSION, 1, 0);
-    var err: cstring
-    if sqlite.SQLITE_ERROR == sqlite.load_extension(db.handle, path.cstring, nil, err):
-      if err == nil:
-        raise newSqliteError("Unable to load extension.")
-      else:
-        let msg = $err
-        sqlite.free err
-        raise newSqliteError(msg)
+when not defined(macosx):
+    proc loadExtension*(db: DbConn, path: string) =
+        ## Load an SQLite extension. Will raise a ``SqliteError`` exception if loading fails.
+        db.checkRc sqlite.db_config(db.handle, sqlite.SQLITE_DBCONFIG_ENABLE_LOAD_EXTENSION, 1, 0);
+        var err: cstring
+        if sqlite.SQLITE_ERROR == sqlite.load_extension(db.handle, path.cstring, nil, err):
+            if err == nil:
+                raise newSqliteError("Unable to load extension.")
+            else:
+                let msg = $err
+                sqlite.free err
+                raise newSqliteError(msg)
 
 #
 # ResultRow
