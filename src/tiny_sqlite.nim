@@ -1,7 +1,8 @@
 ## .. include:: ./tiny_sqlite/private/documentation.rst
 
 import std / [options, typetraits, sequtils]
-from tiny_sqlite / sqlite_wrapper as sqlite import nil
+# from tiny_sqlite / sqlite_wrapper as sqlite import nil
+from tiny_sqlite / sqlite3_abi as abi import nil
 import tiny_sqlite / private / stmtcache
 
 when not declared(tupleLen):
@@ -10,17 +11,23 @@ when not declared(tupleLen):
         let impl = getType(typ)
         result = newIntlitNode(impl[1].len - 1)
 
+# import sqlite3_abi
+
+# type X = ptr sqlite3
+# let db2 = create(X)
+# discard sqlite3_open(":memory", db2)
+
 export options.get, options.isSome, options.isNone
 
 type
     DbConnImpl = ref object 
-        handle: sqlite.Sqlite3 ## The underlying SQLite3 handle
+        handle: ptr abi.sqlite3 ## The underlying SQLite3 handle
         cache: StmtCache
 
     DbConn* = distinct DbConnImpl ## Encapsulates a database connection.
 
     SqlStatementImpl = ref object
-        handle: sqlite.Stmt
+        handle: ptr abi.sqlite3_stmt
         db: DbConn
 
     SqlStatement* = distinct SqlStatementImpl ## A prepared SQL statement.
@@ -62,15 +69,14 @@ type
         values: seq[DbValue]
         columns: seq[string]
 
-const SqliteRcOk = [ sqlite.SQLITE_OK, sqlite.SQLITE_DONE, sqlite.SQLITE_ROW ]
-
+const SqliteRcOk = [ abi.SQLITE_OK, abi.SQLITE_DONE, abi.SQLITE_ROW ]
 
 # Forward declarations
 proc isInTransaction*(db: DbConn): bool {.noSideEffect.}
 proc isOpen*(db: DbConn): bool {.noSideEffect, inline.}
 
-template handle(db: DbConn): sqlite.Sqlite3 = DbConnImpl(db).handle
-template handle(statement: SqlStatement): sqlite.Stmt = SqlStatementImpl(statement).handle
+template handle(db: DbConn): ptr abi.sqlite3 = DbConnImpl(db).handle
+template handle(statement: SqlStatement): ptr abi.sqlite3_stmt = SqlStatementImpl(statement).handle
 template db(statement: SqlStatement): DbConn = SqlStatementImpl(statement).db
 template cache(db: DbConn): StmtCache = DbConnImpl(db).cache
 
@@ -85,12 +91,12 @@ template assertCanUseStatement(statement: SqlStatement, busyOk: static[bool] = f
     doAssert not statement.db.handle.isNil,
         "Statement cannot be used because the database connection has been closed"
     when not busyOk:
-        doAssert not sqlite.stmt_busy(statement.handle),
+        doAssert 0 == abi.sqlite3_stmt_busy(statement.handle),
             "Statement cannot be used while inside the 'all' iterator"
 
 proc newSqliteError(db: DbConn): ref SqliteError =
     ## Raises a SqliteError exception.
-    (ref SqliteError)(msg: "sqlite error: " & $sqlite.errmsg(db.handle))
+    (ref SqliteError)(msg: "sqlite error: " & $abi.sqlite3_errmsg(db.handle))
 
 proc newSqliteError(msg: string): ref SqliteError =
     ## Raises a SqliteError exception.
@@ -234,9 +240,9 @@ proc `==`*(a, b: DbValue): bool =
 # PStmt
 #
 
-proc bindParams(db: DbConn, stmtHandle: sqlite.Stmt, params: varargs[DbValue]): Rc =
-    result = sqlite.SQLITE_OK
-    let expectedParamsLen = sqlite.bind_parameter_count(stmtHandle) 
+proc bindParams(db: DbConn, stmtHandle: ptr abi.sqlite3_stmt, params: varargs[DbValue]): Rc =
+    result = abi.SQLITE_OK
+    let expectedParamsLen = abi.sqlite3_bind_parameter_count(stmtHandle) 
     if expectedParamsLen != params.len:
         raise newSqliteError("SQL statement contains " & $expectedParamsLen &
             " parameters but only " & $params.len & " was provided.")
@@ -246,16 +252,16 @@ proc bindParams(db: DbConn, stmtHandle: sqlite.Stmt, params: varargs[DbValue]): 
         let rc =
             case value.kind
             of sqliteNull:
-                sqlite.bind_null(stmtHandle, idx)
+                abi.sqlite3_bind_null(stmtHandle, idx)
             of sqliteInteger:
-                sqlite.bind_int64(stmtHandle, idx, value.intval)
+                abi.sqlite3_bind_int64(stmtHandle, idx, value.intval)
             of sqliteReal:
-                sqlite.bind_double(stmtHandle, idx, value.floatVal)
+                abi.sqlite3_bind_double(stmtHandle, idx, value.floatVal)
             of sqliteText:   
-                sqlite.bind_text(stmtHandle, idx, value.strVal.cstring, value.strVal.len.int32, sqlite.SQLITE_TRANSIENT)
+                abi.sqlite3_bind_text(stmtHandle, idx, value.strVal.cstring, value.strVal.len.int32, abi.SQLITE_TRANSIENT)
             of sqliteBlob:
-                sqlite.bind_blob(stmtHandle, idx.int32, cast[string](value.blobVal).cstring,
-                    value.blobVal.len.int32, sqlite.SQLITE_TRANSIENT)
+                abi.sqlite3_bind_blob(stmtHandle, idx.int32, cast[string](value.blobVal).cstring,
+                    value.blobVal.len.int32, abi.SQLITE_TRANSIENT)
 
         if rc notin SqliteRcOk:
             return rc
