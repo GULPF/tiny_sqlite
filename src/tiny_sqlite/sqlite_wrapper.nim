@@ -286,8 +286,9 @@ proc stmt_busy*(stmt: Stmt): bool
 proc db_config*(db: Sqlite3, op: cint, a, b: cint): cint
     {.cdecl, dynlib: Lib, importc: "sqlite3_db_config".}
 
-proc load_extension*(db: Sqlite3, filename: cstring, entry: cstring, error: var cstring): cint
-    {.cdecl, dynlib: Lib, importc: "sqlite3_load_extension".}
-
 proc free*(z: cstring)
     {.cdecl, dynlib: Lib, importc: "sqlite3_free".}
+
+when not defined(macosx):
+    proc load_extension*(db: Sqlite3, filename: cstring, entry: cstring, error: var cstring): cint
+        {.cdecl, dynlib: Lib, importc: "sqlite3_load_extension".}
