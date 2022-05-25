@@ -2,12 +2,12 @@
 ## https://github.com/jackhftang/lrucache.nim.
 
 import std / [lists, tables]
-from .. / sqlite_wrapper as sqlite import nil
+from .. / .. / .. / .. / nim-sqlite3-abi / sqlite3_abi as abi import nil
 
 type
   Node = object
     key: string
-    val: sqlite.Stmt
+    val: ptr abi.sqlite3_stmt
 
   StmtCache* = object 
     capacity: int
@@ -26,7 +26,7 @@ proc resize(cache: var StmtCache) =
   while cache.table.len > cache.capacity:
     let t = cache.list.tail
     cache.table.del(t.value.key)
-    discard sqlite.finalize(t.value.val)
+    discard abi.sqlite3_finalize(t.value.val)
     cache.list.remove t
 
 proc capacity*(cache: StmtCache): int = 
@@ -46,7 +46,7 @@ proc clear*(cache: var StmtCache) =
   cache.list = initDoublyLinkedList[Node]()
   cache.table.clear()
 
-proc `[]`*(cache: var StmtCache, key: string): sqlite.Stmt =
+proc `[]`*(cache: var StmtCache, key: string): ptr abi.sqlite3_stmt =
   ## Read value from `cache` by `key` and update recentness
   ## Raise `KeyError` if `key` is not in `cache`.
   let node = cache.table[key]
@@ -54,7 +54,7 @@ proc `[]`*(cache: var StmtCache, key: string): sqlite.Stmt =
   cache.list.remove node
   cache.list.prepend node
 
-proc `[]=`*(cache: var StmtCache, key: string, val: sqlite.Stmt) =
+proc `[]=`*(cache: var StmtCache, key: string, val: ptr abi.sqlite3_stmt) =
   ## Put value `v` in cache with key `k`.
   ## Remove least recently used value from cache if length exceeds capacity.
   var node = cache.table.getOrDefault(key, nil)
@@ -72,7 +72,7 @@ proc `[]=`*(cache: var StmtCache, key: string, val: sqlite.Stmt) =
     cache.list.remove node
     cache.list.prepend node
     
-proc getOrDefault*(cache: StmtCache, key: string, val: sqlite.Stmt = nil): sqlite.Stmt =
+proc getOrDefault*(cache: StmtCache, key: string, val: ptr abi.sqlite3_stmt = nil): ptr abi.sqlite3_stmt =
   ## Similar to get, but return `val` if `key` is not in `cache`
   let node = cache.table.getOrDefault(key, nil)
   if node.isNil:

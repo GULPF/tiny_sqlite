@@ -1,8 +1,7 @@
 ## .. include:: ./tiny_sqlite/private/documentation.rst
 
 import std / [options, typetraits, sequtils]
-# from tiny_sqlite / sqlite_wrapper as sqlite import nil
-from tiny_sqlite / sqlite3_abi as abi import nil
+from .. / .. / nim-sqlite3-abi / sqlite3_abi as abi import nil
 import tiny_sqlite / private / stmtcache
 
 when not declared(tupleLen):
@@ -11,11 +10,7 @@ when not declared(tupleLen):
         let impl = getType(typ)
         result = newIntlitNode(impl[1].len - 1)
 
-# import sqlite3_abi
-
-# type X = ptr sqlite3
-# let db2 = create(X)
-# discard sqlite3_open(":memory", db2)
+const SqliteTransient* = cast[proc (p: pointer) {.cdecl, raises: [].}](-1)
 
 export options.get, options.isSome, options.isNone
 
@@ -258,25 +253,26 @@ proc bindParams(db: DbConn, stmtHandle: ptr abi.sqlite3_stmt, params: varargs[Db
             of sqliteReal:
                 abi.sqlite3_bind_double(stmtHandle, idx, value.floatVal)
             of sqliteText:   
-                abi.sqlite3_bind_text(stmtHandle, idx, value.strVal.cstring, value.strVal.len.int32, abi.SQLITE_TRANSIENT)
+                abi.sqlite3_bind_text(stmtHandle, idx, value.strVal.cstring, value.strVal.len.int32, SqliteTransient)
             of sqliteBlob:
                 abi.sqlite3_bind_blob(stmtHandle, idx.int32, cast[string](value.blobVal).cstring,
-                    value.blobVal.len.int32, abi.SQLITE_TRANSIENT)
+                    value.blobVal.len.int32, SqliteTransient)
 
         if rc notin SqliteRcOk:
             return rc
         idx.inc
 
-proc prepareSql(db: DbConn, sql: string): sqlite.Stmt =
+proc prepareSql(db: DbConn, sql: string): ptr abi.sqlite3_stmt =
     var tail: cstring
-    let rc = sqlite.prepare_v2(db.handle, sql.cstring, sql.len.cint + 1, result, tail)
+    let rc = abi.sqlite3_prepare_v2(db.handle, sql.cstring, sql.len.cint + 1, addr result, addr tail)
+    # (db.handle, sql.cstring, sql.len.cint + 1, addr result, tail)
     db.checkRc(rc)
     tail.skipLeadingWhiteSpaceAndComments()
     assert tail.len == 0,
         "Only single SQL statement is allowed in this context. " &
         "To execute several SQL statements, use 'execScript'"
 
-proc prepareSql(db: DbConn, sql: string, params: seq[DbValue]): sqlite.Stmt
+proc prepareSql(db: DbConn, sql: string, params: seq[DbValue]): ptr abi.sqlite3_stmt
         {.raises: [SqliteError].} =
     if db.hasCache:
         result = db.cache.getOrDefault(sql)
@@ -288,48 +284,48 @@ proc prepareSql(db: DbConn, sql: string, params: seq[DbValue]): sqlite.Stmt
     let rc = db.bindParams(result, params)
     db.checkRc(rc)
 
-proc readColumn(stmtHandle: sqlite.Stmt, col: int32): DbValue =
-    let columnType = sqlite.column_type(stmtHandle, col)
+proc readColumn(stmtHandle: ptr abi.sqlite3_stmt, col: int32): DbValue =
+    let columnType = abi.sqlite3_column_type(stmtHandle, col)
     case columnType
-    of sqlite.SQLITE_INTEGER:
-        result = toDbValue(sqlite.column_int64(stmtHandle, col))
-    of sqlite.SQLITE_FLOAT:
-        result = toDbValue(sqlite.column_double(stmtHandle, col))
-    of sqlite.SQLITE_TEXT:
-        result = toDbValue($sqlite.column_text(stmtHandle, col))
-    of sqlite.SQLITE_BLOB:
-        let blob = sqlite.column_blob(stmtHandle, col)
-        let bytes = sqlite.column_bytes(stmtHandle, col)
+    of abi.SQLITE_INTEGER:
+        result = toDbValue(abi.sqlite3_column_int64(stmtHandle, col))
+    of abi.SQLITE_FLOAT:
+        result = toDbValue(abi.sqlite3_column_double(stmtHandle, col))
+    of abi.SQLITE_TEXT:
+        result = toDbValue($abi.sqlite3_column_text(stmtHandle, col).cstring)
+    of abi.SQLITE_BLOB:
+        let blob = abi.sqlite3_column_blob(stmtHandle, col)
+        let bytes = abi.sqlite3_column_bytes(stmtHandle, col)
         var s = newSeq[byte](bytes)
         if bytes != 0:
             copyMem(addr(s[0]), blob, bytes)
         result = toDbValue(s)
-    of sqlite.SQLITE_NULL:
+    of abi.SQLITE_NULL:
         result = toDbValue(nil)
     else:
         raiseAssert "Unexpected column type: " & $columnType
 
-iterator iterate(db: DbConn, stmtOrHandle: sqlite.Stmt | SqlStatement, params: varargs[DbValue],
+iterator iterate(db: DbConn, stmtOrHandle: ptr abi.sqlite3_stmt | SqlStatement, params: varargs[DbValue],
         errorRc: var int32): ResultRow =
-    let stmtHandle = when stmtOrHandle is sqlite.Stmt: stmtOrHandle else: stmtOrHandle.handle
+    let stmtHandle = when stmtOrHandle is ptr abi.sqlite3_stmt: stmtOrHandle else: stmtOrHandle.handle
     errorRc = db.bindParams(stmtHandle, params)
     if errorRc in SqliteRcOk:
-        var rowLen = sqlite.column_count(stmtHandle)
+        var rowLen = abi.sqlite3_column_count(stmtHandle)
         var columns = newSeq[string](rowLen)
         for idx in 0 ..< rowLen:
-            columns[idx] = $sqlite.column_name(stmtHandle, idx)
+            columns[idx] = $abi.sqlite3_column_name(stmtHandle, idx)
         while true:
             var row = ResultRow(values: newSeq[DbValue](rowLen), columns: columns)
-            when stmtOrHandle is sqlite.Stmt:
+            when stmtOrHandle is ptr abi.sqlite3_stmt:
                 assertCanUseDb db
             else:
                 assertCanUseStatement stmtOrHandle, busyOk = true
-            let rc = sqlite.step(stmtHandle)
-            if rc == sqlite.SQLITE_ROW:
+            let rc = abi.sqlite3_step(stmtHandle)
+            if rc == abi.SQLITE_ROW:
                 for idx in 0 ..< rowLen:
                     row.values[idx] = readColumn(stmtHandle, idx)
                 yield row
-            elif rc == sqlite.SQLITE_DONE:
+            elif rc == abi.SQLITE_DONE:
                 break
             else:
                 errorRc = rc
@@ -348,11 +344,11 @@ proc exec*(db: DbConn, sql: string, params: varargs[DbValue, toDbValue]) =
             "John Doe", 23)
     assertCanUseDb db
     let stmtHandle = db.prepareSql(sql, @params)
-    let rc = sqlite.step(stmtHandle)
+    let rc = abi.sqlite3_step(stmtHandle)
     if db.hasCache:
-        discard sqlite.reset(stmtHandle)
+        discard abi.sqlite3_reset(stmtHandle)
     else:
-        discard sqlite.finalize(stmtHandle)
+        discard abi.sqlite3_finalize(stmtHandle)
     db.checkRc(rc)
 
 template transaction*(db: DbConn, body: untyped) =
@@ -390,11 +386,11 @@ proc execScript*(db: DbConn, sql: string) =
         var remaining = sql.cstring
         while remaining.len > 0:
             var tail: cstring
-            var stmtHandle: sqlite.Stmt
-            var rc = sqlite.prepare_v2(db.handle, remaining, -1, stmtHandle, tail)
+            var stmtHandle: ptr abi.sqlite3_stmt
+            var rc = abi.sqlite3_prepare_v2(db.handle, remaining, -1, addr stmtHandle, addr tail)
             db.checkRc(rc)
-            rc = sqlite.step(stmtHandle)
-            discard sqlite.finalize(stmtHandle)
+            rc = abi.sqlite3_step(stmtHandle)
+            discard abi.sqlite3_finalize(stmtHandle)
             db.checkRc(rc)
             remaining = tail
             remaining.skipLeadingWhiteSpaceAndComments()
@@ -413,9 +409,9 @@ iterator iterate*(db: DbConn, sql: string,
         # case we don't need to clean up the statement.
         if not db.handle.isNil:
             if db.hasCache:
-                discard sqlite.reset(stmtHandle)
+                discard abi.sqlite3_reset(stmtHandle)
             else:
-                discard sqlite.finalize(stmtHandle)
+                discard abi.sqlite3_finalize(stmtHandle)
         db.checkRc(errorRc)
 
 proc all*(db: DbConn, sql: string,
@@ -443,12 +439,12 @@ proc close*(db: DbConn) =
     ## to avoid leaking memory. Closing an already closed database is a harmless no-op.
     if not db.isOpen:
         return
-    var stmtHandle = sqlite.next_stmt(db.handle, nil)
+    var stmtHandle = abi.sqlite3_next_stmt(db.handle, nil)
     while not stmtHandle.isNil:
-        discard sqlite.finalize(stmtHandle)
-        stmtHandle = sqlite.next_stmt(db.handle, nil)
+        discard abi.sqlite3_finalize(stmtHandle)
+        stmtHandle = abi.sqlite3_next_stmt(db.handle, nil)
     db.cache.clear()
-    let rc = sqlite.close(db.handle)
+    let rc = abi.sqlite3_close(db.handle)
     db.checkRc(rc)
     DbConnImpl(db).handle = nil
 
@@ -460,7 +456,7 @@ proc lastInsertRowId*(db: DbConn): int64 =
     ## For more information, refer to the SQLite documentation
     ## (https://www.sqlite.org/c3ref/last_insert_rowid.html).
     assertCanUseDb db
-    sqlite.last_insert_rowid(db.handle)
+    abi.sqlite3_last_insert_rowid(db.handle)
 
 proc changes*(db: DbConn): int32 =
     ## Get the number of changes triggered by the most recent INSERT, UPDATE or
@@ -469,7 +465,7 @@ proc changes*(db: DbConn): int32 =
     ## For more information, refer to the SQLite documentation
     ## (https://www.sqlite.org/c3ref/changes.html).
     assertCanUseDb db
-    sqlite.changes(db.handle)
+    abi.sqlite3_changes(db.handle)
 
 proc isReadonly*(db: DbConn): bool =
     ## Returns true if ``db`` is in readonly mode.
@@ -479,7 +475,7 @@ proc isReadonly*(db: DbConn): bool =
         let db2 = openDatabase(":memory:", dbRead)
         doAssert db2.isReadonly
     assertCanUseDb db
-    sqlite.db_readonly(db.handle, "main") == 1
+    abi.sqlite3_db_readonly(db.handle, "main") == 1
 
 proc isOpen*(db: DbConn): bool {.inline.} =
     ## Returns true if `db` has been opened and not yet closed.
@@ -500,9 +496,9 @@ proc isInTransaction*(db: DbConn): bool =
         db.transaction:
             doAssert db.isInTransaction
     assertCanUseDb db
-    sqlite.get_autocommit(db.handle) == 0
+    abi.sqlite3_get_autocommit(db.handle) == 0
 
-proc unsafeHandle*(db: DbConn): sqlite.Sqlite3 {.inline.} =
+proc unsafeHandle*(db: DbConn): ptr abi.sqlite3 {.inline.} =
     ## Returns the raw SQLite3 handle. This can be used to interact directly with the SQLite C API
     ## with the `tiny_sqlite/sqlite_wrapper` module. Note that the handle should not be used after `db.close` has
     ## been called as doing so would break memory safety.
@@ -524,11 +520,11 @@ proc exec*(statement: SqlStatement, params: varargs[DbValue, toDbValue]) =
     assertCanUseStatement statement
     var rc = statement.db.bindParams(statement.handle, params)
     if rc notin SqliteRcOk:
-        discard sqlite.reset(statement.handle)
+        discard abi.sqlite3_reset(statement.handle)
         statement.db.checkRc(rc)
     else:
-        rc = sqlite.step(statement.handle)
-        discard sqlite.reset(statement.handle)
+        rc = abi.sqlite3_step(statement.handle)
+        discard abi.sqlite3_reset(statement.handle)
         statement.db.checkRc(rc)
 
 proc execMany*(statement: SqlStatement, params: seq[seq[DbValue]]) =
@@ -550,7 +546,7 @@ iterator iterate*(statement: SqlStatement, params: varargs[DbValue, toDbValue]):
         # The database might have been closed while iterating, in which
         # case we don't need to clean up the statement.
         if not statement.db.handle.isNil:
-            discard sqlite.reset(statement.handle)
+            discard abi.sqlite3_reset(statement.handle)
         statement.db.checkRc errorRc
 
 proc all*(statement: SqlStatement, params: varargs[DbValue, toDbValue]): seq[ResultRow] =
@@ -580,7 +576,7 @@ proc finalize*(statement: SqlStatement): void =
     ## prevent memory leaks. Finalizing an already finalized statement is a harmless no-op.
     if SqlStatementImpl(statement).isNil:
         return
-    discard sqlite.finalize(statement.handle)
+    discard abi.sqlite3_finalize(statement.handle)
     SqlStatementImpl(statement).handle = nil
 
 proc isAlive*(statement: SqlStatement): bool =
@@ -599,7 +595,7 @@ proc openDatabase*(path: string, mode = dbReadWrite, cacheSize: Natural = 100): 
     ## database connection is no longer needed.
     runnableExamples:
         let memDb = openDatabase(":memory:")
-    var handle: sqlite.Sqlite3
+    var handle: ptr abi.sqlite3
     let db = new DbConnImpl
     db.handle = handle
     if cacheSize > 0:
@@ -607,24 +603,24 @@ proc openDatabase*(path: string, mode = dbReadWrite, cacheSize: Natural = 100): 
     result = DbConn(db)
     case mode
     of dbReadWrite:
-        let rc = sqlite.open(path, db.handle)
+        let rc = abi.sqlite3_open(path, addr db.handle)
         result.checkRc(rc)
     of dbRead:
-        let rc = sqlite.open_v2(path, db.handle, sqlite.SQLITE_OPEN_READONLY, nil)
+        let rc = abi.sqlite3_open_v2(path, addr db.handle, abi.SQLITE_OPEN_READONLY, nil)
         result.checkRc(rc)
     result.exec("PRAGMA encoding = 'UTF-8'")
     result.exec("PRAGMA foreign_keys = ON")
 
 proc loadExtension*(db: DbConn, path: string) =
     ## Load an SQLite extension. Will raise a ``SqliteError`` exception if loading fails.
-    db.checkRc sqlite.db_config(db.handle, sqlite.SQLITE_DBCONFIG_ENABLE_LOAD_EXTENSION, 1, 0);
+    db.checkRc abi.sqlite3_db_config(db.handle, abi.SQLITE_DBCONFIG_ENABLE_LOAD_EXTENSION, 1, 0);
     var err: cstring
-    if sqlite.SQLITE_ERROR == sqlite.load_extension(db.handle, path.cstring, nil, err):
+    if abi.SQLITE_ERROR == abi.sqlite3_load_extension(db.handle, path.cstring, nil, addr err):
       if err == nil:
         raise newSqliteError("Unable to load extension.")
       else:
         let msg = $err
-        sqlite.free err
+        abi.sqlite3_free err
         raise newSqliteError(msg)
 
 #
