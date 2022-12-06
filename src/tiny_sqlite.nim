@@ -68,6 +68,7 @@ const SqliteRcOk = [ sqlite.SQLITE_OK, sqlite.SQLITE_DONE, sqlite.SQLITE_ROW ]
 # Forward declarations
 proc isInTransaction*(db: DbConn): bool {.noSideEffect.}
 proc isOpen*(db: DbConn): bool {.noSideEffect, inline.}
+proc isAlive*(statement: SqlStatement): bool {.noSideEffect.}
 
 template handle(db: DbConn): sqlite.Sqlite3 = DbConnImpl(db).handle
 template handle(statement: SqlStatement): sqlite.Stmt = SqlStatementImpl(statement).handle
@@ -134,6 +135,10 @@ proc skipLeadingWhiteSpaceAndComments(sql: var cstring) =
         else:
             return
 
+proc resetStmt(stmtHandle: sqlite.Stmt) =
+    discard sqlite.reset(stmt_handle)
+    discard sqlite.clear_bindings(stmt_handle)
+
 #
 # DbValue
 #
@@ -173,7 +178,7 @@ proc toDbValues*(values: varargs[DbValue, toDbValue]): seq[DbValue] =
 
 proc fromDbValue*(value: DbValue, T: typedesc[Ordinal]): T =
     # Convert a DbValue to an ordinal.
-    value.intval.T
+    value.intVal.T
 
 proc fromDbValue*(value: DbValue, T: typedesc[SomeFloat]): float64 =
     ## Convert a DbValue to a float.
@@ -344,7 +349,7 @@ proc exec*(db: DbConn, sql: string, params: varargs[DbValue, toDbValue]) =
     let stmtHandle = db.prepareSql(sql, @params)
     let rc = sqlite.step(stmtHandle)
     if db.hasCache:
-        discard sqlite.reset(stmtHandle)
+        resetStmt(stmtHandle)
     else:
         discard sqlite.finalize(stmtHandle)
     db.checkRc(rc)
@@ -407,7 +412,7 @@ iterator iterate*(db: DbConn, sql: string,
         # case we don't need to clean up the statement.
         if not db.handle.isNil:
             if db.hasCache:
-                discard sqlite.reset(stmtHandle)
+                resetStmt(stmtHandle)
             else:
                 discard sqlite.finalize(stmtHandle)
         db.checkRc(errorRc)
@@ -497,7 +502,7 @@ proc isInTransaction*(db: DbConn): bool =
     sqlite.get_autocommit(db.handle) == 0
 
 proc unsafeHandle*(db: DbConn): sqlite.Sqlite3 {.inline.} =
-    ## Returns the raw SQLite3 handle. This can be used to interact directly with the SQLite C API
+    ## Returns the raw SQLite3 database handle. This can be used to interact directly with the SQLite C API
     ## with the `tiny_sqlite/sqlite_wrapper` module. Note that the handle should not be used after `db.close` has
     ## been called as doing so would break memory safety.
     assert not DbConnImpl(db).handle.isNil, "Database is closed"
@@ -518,11 +523,11 @@ proc exec*(statement: SqlStatement, params: varargs[DbValue, toDbValue]) =
     assertCanUseStatement statement
     var rc = statement.db.bindParams(statement.handle, params)
     if rc notin SqliteRcOk:
-        discard sqlite.reset(statement.handle)
+        resetStmt(statement.handle)
         statement.db.checkRc(rc)
     else:
         rc = sqlite.step(statement.handle)
-        discard sqlite.reset(statement.handle)
+        resetStmt(statement.handle)
         statement.db.checkRc(rc)
 
 proc execMany*(statement: SqlStatement, params: seq[seq[DbValue]]) =
@@ -541,10 +546,10 @@ iterator iterate*(statement: SqlStatement, params: varargs[DbValue, toDbValue]):
         for row in statement.db.iterate(statement, params, errorRc):
             yield row
     finally:
-        # The database might have been closed while iterating, in which
-        # case we don't need to clean up the statement.
-        if not statement.db.handle.isNil:
-            discard sqlite.reset(statement.handle)
+        # The database might have been closed while iterating or the statement
+        # might have been finalized, in which case we don't need to clean up the statement.
+        if statement.isAlive:
+            resetStmt(statement.handle)
         statement.db.checkRc errorRc
 
 proc all*(statement: SqlStatement, params: varargs[DbValue, toDbValue]): seq[ResultRow] =

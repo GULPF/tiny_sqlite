@@ -14,7 +14,7 @@ const seedScript = staticRead("./seed_test_db.sql")
 
 template withDb(body: untyped) =
     block:
-        let db {.inject.}= openDatabase(":memory:")
+        let db {.inject.} = openDatabase(":memory:")
         db.execScript(seedScript)
         try:
             body
