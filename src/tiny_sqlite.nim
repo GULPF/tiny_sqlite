@@ -136,8 +136,8 @@ proc skipLeadingWhiteSpaceAndComments(sql: var cstring) =
             return
 
 proc resetStmt(stmtHandle: sqlite.Stmt) =
-    discard sqlite.reset(stmt_handle)
-    discard sqlite.clear_bindings(stmt_handle)
+    discard sqlite.reset(stmtHandle)
+    discard sqlite.clear_bindings(stmtHandle)
 
 #
 # DbValue
