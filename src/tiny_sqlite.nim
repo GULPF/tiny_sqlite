@@ -97,6 +97,10 @@ proc newSqliteError(msg: string): ref SqliteError =
     ## Raises a SqliteError exception.
     (ref SqliteError)(msg: msg)
 
+proc newSqliteError(exc: ref Exception): ref SqliteError =
+    ## Raises a SqliteError exception on an internal error.
+    (ref SqliteError)(msg: "Unexpected error: " & exc.msg)
+
 template checkRc(db: DbConn, rc: Rc) =
     if rc notin SqliteRcOk:
         raise newSqliteError(db)
@@ -363,26 +367,54 @@ template transaction*(db: DbConn, body: untyped) =
         body
     else:
         db.exec("BEGIN")
-        var ok = false
+        var ok = true
         try:
-            body
-            ok = true
+            # Rollback on anything we can catch. It's unclear what the future
+            # of Nim exception handling must be, but the transaction should not
+            # live on.
+            {.push warning[BareExcept]: off.}
+            try:
+                body
+            except:
+                ok = false
+                db.exec("ROLLBACK")
+                raise
+            {.pop.}
         finally:
-            db.exec(if ok: "COMMIT" else: "ROLLBACK")
+            if ok:
+                db.exec("COMMIT")
 
-proc execMany*(db: DbConn, sql: string, params: seq[seq[DbValue]]) =
+template transactionInternal(db: DbConn, body: untyped) =
+    ## Use this for internal transactions when it is evident that body only raises SqliteError.
+    ## Any unexpected CatchableError gets converted to SqliteError to pacify exception tracking.
+    {.push warning[BareExcept]: off.}
+    # We handle all possible cases explicitly here so disable warnings
+    try:
+        db.transaction:
+            body
+    except Defect as e:
+        raise e
+    except SqliteError as e:
+        raise e
+    except Exception as e:  # should not happen if used as prescribed
+        raise newSqliteError(e)
+    {.pop.}
+
+proc execMany*(db: DbConn, sql: string, params: seq[seq[DbValue]])
+              {.raises: [SqliteError].} =
     ## Executes ``sql``, which must be a single SQL statement, repeatedly using each element of
     ## ``params`` as parameters. The statements are executed inside a transaction.
     assertCanUseDb db
-    db.transaction:
+    db.transactionInternal:
         for p in params:
             db.exec(sql, p)
 
-proc execScript*(db: DbConn, sql: string) {.raises: [SqliteError].} =
+proc execScript*(db: DbConn, sql: string)
+                {.raises: [SqliteError].} =
     ## Executes ``sql``, which can consist of multiple SQL statements.
     ## The statements are executed inside a transaction.
     assertCanUseDb db
-    db.transaction:
+    db.transactionInternal:
         var remaining = sql.cstring
         while remaining.len > 0:
             var tail: cstring
@@ -529,11 +561,12 @@ proc exec*(statement: SqlStatement, params: varargs[DbValue, toDbValue])
         resetStmt(statement.handle)
         statement.db.checkRc(rc)
 
-proc execMany*(statement: SqlStatement, params: seq[seq[DbValue]]) =
+proc execMany*(statement: SqlStatement, params: seq[seq[DbValue]])
+              {.raises: [SqliteError].} =
     ## Executes ``statement`` repeatedly using each element of ``params`` as parameters.
     ## The statements are executed inside a transaction.
     assertCanUseStatement statement
-    statement.db.transaction:
+    statement.db.transactionInternal:
         for p in params:
             statement.exec(p)
 
