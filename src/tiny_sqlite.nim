@@ -386,7 +386,7 @@ template transaction*(db: DbConn, body: untyped) =
 
 template transactionInternal(db: DbConn, body: untyped) =
     ## Use this for internal transactions when it is evident that body only raises SqliteError.
-    ## Any unexpected CatchableError gets converted to SqliteError to pacify exception tracking.
+    ## Any unexpected Exception gets converted to SqliteError to pacify exception tracking.
     {.push warning[BareExcept]: off.}
     # We handle all possible cases explicitly here so disable warnings
     try:
