@@ -265,6 +265,18 @@ test "row.unpack":
         expect AssertionDefect:
             discard row.unpack(tuple[name: string])
 
+test "stmt.columnMetadata":
+    withDb:
+        let stmt = db.stmt(SelectPersons)
+        check stmt.columnCount == 2
+        let col1 = stmt.columnMetadata(1)
+        check col1.isSome
+        check col1.get.databaseName == "main"
+        check col1.get.tableName == "Person"
+        check col1.get.originName == "age"
+        let col2 = stmt.columnMetadata(2)
+        check col2.isNone
+
 test "stmt.all":
     withDb:
         let stmt = db.stmt(SelectPersons)

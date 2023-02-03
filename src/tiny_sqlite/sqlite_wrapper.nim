@@ -223,6 +223,12 @@ proc column_count*(stmt: Stmt): cint
 proc column_name*(stmt: Stmt, col: cint): cstring
     {.cdecl, dynlib: Lib, importc: "sqlite3_column_name".}
 
+proc column_database_name*(stmt: Stmt, col: cint): cstring
+    {.cdecl, dynlib: Lib, importc: "sqlite3_column_database_name".}
+
+proc column_origin_name*(stmt: Stmt, col: cint): cstring
+    {.cdecl, dynlib: Lib, importc: "sqlite3_column_origin_name".}
+
 proc column_table_name*(stmt: Stmt, col: cint): cstring
     {.cdecl, dynlib: Lib, importc: "sqlite3_column_table_name".}
 
