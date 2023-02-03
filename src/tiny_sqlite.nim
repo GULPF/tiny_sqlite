@@ -62,6 +62,12 @@ type
         values: seq[DbValue]
         columns: seq[string]
 
+    ColumnMetadata* = object
+        databaseName*: string
+        tableName*: string
+        originName*: string
+
+
 const SqliteRcOk = [ sqlite.SQLITE_OK, sqlite.SQLITE_DONE, sqlite.SQLITE_ROW ]
 
 
@@ -573,6 +579,25 @@ proc value*(statement: SqlStatement,
     assertCanUseStatement statement
     for row in statement.iterate(params):
         return some(row.values[0])
+
+func columnCount*(statement: SqlStatement): int =
+    ## Get column count for the prepared statement.
+    assertCanUseStatement statement
+    sqlite.column_count(statement.handle)
+
+func columnMetadata*(statement: SqlStatement, idx: Natural): Option[ColumnMetadata] =
+    ## Get column metadata for the given column of the prepared statement.
+    ## See https://www.sqlite.org/c3ref/column_database_name.html
+    assertCanUseStatement statement
+    let
+      db = sqlite.column_database_name(statement.handle, idx.int32)
+      table = sqlite.column_table_name(statement.handle, idx.int32)
+      origin = sqlite.column_origin_name(statement.handle, idx.int32)
+    if db == nil or table == nil or origin == nil:
+      return none(ColumnMetadata)
+    some(ColumnMetadata(databaseName: $db,
+                        tableName: $table,
+                        originName: $origin))
 
 proc finalize*(statement: SqlStatement): void =
     ## Finalize the statement. This needs to be called once the statement is no longer used to
