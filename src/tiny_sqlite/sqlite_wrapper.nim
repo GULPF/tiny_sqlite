@@ -10,7 +10,8 @@ elif defined(macosx):
     Lib = "libsqlite3(|.0).dylib"
 else:
   const
-    Lib = "libsqlite3.so(|.0)"
+    sqliteLocation{.strdefine.} = "libsqlite3.so(|.0)"
+    Lib = sqliteLocation
 
 type
     Sqlite3* = ptr object
